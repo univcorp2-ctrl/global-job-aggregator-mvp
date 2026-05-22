@@ -1,21 +1,21 @@
 # Global Job Aggregator MVP
 
-Safety-first MVP for collecting global job opportunities from official APIs, public JSON feeds, and ATS job-board APIs. The first version is optimized for AI automation, RAG, OpenAI/Claude API, workflow automation, scraping-analysis, LLM evaluation, and remote/high-value roles.
+Safety-first MVP for collecting global job opportunities from official APIs, public JSON feeds, and ATS job-board APIs. The first version targets AI automation, RAG, OpenAI/Claude API, workflow automation, scraping-analysis, LLM evaluation, and remote/high-value roles.
 
-## What this MVP does
+## What it does
 
 - Collects jobs from API-first sources into SQLite.
 - Avoids login scraping and browser automation for platforms that prohibit it.
-- Normalizes different job schemas into one table.
+- Normalizes different job schemas into one `jobs` table.
 - Scores AI relevance and personal fit.
 - Creates a first-pass proposal draft for each job.
 - Exposes a FastAPI JSON API and a simple browser dashboard.
 - Runs tests and linting on GitHub Actions.
 - Can run scheduled collection and upload `jobs.db` as an Actions artifact.
 
-## Source strategy
+## Sources
 
-### Enabled without API keys
+Enabled without API keys:
 
 - Himalayas public Remote Jobs API
 - Jobicy public API
@@ -25,14 +25,14 @@ Safety-first MVP for collecting global job opportunities from official APIs, pub
 - Lever Postings API for configured company slugs
 - Ashby public Job Postings API for configured board names
 
-### Enabled when keys are provided
+Enabled when keys are provided:
 
 - SerpApi Google Jobs via `SERPAPI_API_KEY`
 - Freelancer.com API via `FREELANCER_OAUTH_TOKEN`
 
-### Excluded from automatic collection for safety
+Excluded by design:
 
-- Upwork page scraping, LinkedIn page scraping, and logged-in browser automation are intentionally not implemented. Upwork can be tracked manually or through approved API access only.
+- Upwork page scraping, LinkedIn page scraping, and logged-in browser automation. Upwork should be handled manually or through approved API access only.
 
 ## Quick start
 
@@ -52,13 +52,11 @@ Open `http://127.0.0.1:8000`.
 - `GET /health`
 - `GET /api/jobs?q=rag&source=himalayas&limit=50`
 - `GET /api/jobs/{id}`
-- `POST /api/collect`
+- `POST /api/collect?force=true`
 
-## Key configuration
+## Configuration
 
-Environment variables are documented in `.env.example` and `docs/setup.md`.
-
-Most important variables:
+Most important environment variables:
 
 - `JOB_KEYWORDS`: comma-separated target keywords.
 - `GREENHOUSE_BOARDS`: comma-separated Greenhouse board tokens.
@@ -104,12 +102,3 @@ pytest -q
 3. Respect source-specific rate limits and cooldowns.
 4. Store source attribution and original URLs.
 5. Keep application submission human-reviewed.
-
-## Next roadmap
-
-- Add user accounts and saved searches.
-- Add Slack/LINE/email alerts for A-priority jobs.
-- Add OpenAI/Claude-based semantic scoring with user profile input.
-- Add CSV/XLSX export.
-- Add employer/company intelligence enrichment.
-- Add a proper deployment workflow once the hosting target is selected.
