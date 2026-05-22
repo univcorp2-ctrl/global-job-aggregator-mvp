@@ -1,0 +1,1 @@
+"""Global job aggregation MVP."""
