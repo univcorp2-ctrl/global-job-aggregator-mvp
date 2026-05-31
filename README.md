@@ -1,6 +1,6 @@
 # Global Job Aggregator MVP
 
-Safety-first MVP for collecting global job opportunities from official APIs, public JSON feeds, and ATS job-board APIs. The first version targets AI automation, RAG, OpenAI/Claude API, workflow automation, scraping-analysis, LLM evaluation, and remote/high-value roles.
+Safety-first MVP for collecting global job opportunities from official APIs, public JSON feeds, and ATS job-board APIs. The first production-ready version targets AI automation, RAG, OpenAI/Claude API, workflow automation, scraping-analysis, LLM evaluation, and remote/high-value roles.
 
 ## What it does
 
@@ -10,8 +10,8 @@ Safety-first MVP for collecting global job opportunities from official APIs, pub
 - Scores AI relevance and personal fit.
 - Creates a first-pass proposal draft for each job.
 - Exposes a FastAPI JSON API and a simple browser dashboard.
-- Runs tests and linting on GitHub Actions.
-- Can run scheduled collection and upload `jobs.db` as an Actions artifact.
+- Runs syntax checks and tests on GitHub Actions.
+- Runs scheduled collection and uploads `jobs.db` plus `collection-summary.json` as an Actions artifact.
 
 ## Sources
 
@@ -19,16 +19,7 @@ Enabled without API keys:
 
 - Himalayas public Remote Jobs API
 - Jobicy public API
-- Remotive public API with conservative cooldown
 - Arbeitnow public Job Board API
-- Greenhouse Job Board API for configured company board tokens
-- Lever Postings API for configured company slugs
-- Ashby public Job Postings API for configured board names
-
-Enabled when keys are provided:
-
-- SerpApi Google Jobs via `SERPAPI_API_KEY`
-- Freelancer.com API via `FREELANCER_OAUTH_TOKEN`
 
 Excluded by design:
 
@@ -40,8 +31,7 @@ Excluded by design:
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-python scripts/collect_once.py --force
+python scripts/collect_once.py --force --summary-path data/collection-summary.json
 uvicorn app.main:app --reload
 ```
 
@@ -56,15 +46,16 @@ Open `http://127.0.0.1:8000`.
 
 ## Configuration
 
-Most important environment variables:
+Most important optional environment variables:
 
-- `JOB_KEYWORDS`: comma-separated target keywords.
-- `GREENHOUSE_BOARDS`: comma-separated Greenhouse board tokens.
-- `LEVER_COMPANIES`: comma-separated Lever company slugs.
-- `ASHBY_BOARDS`: comma-separated Ashby job-board names.
-- `SERPAPI_API_KEY`: optional Google Jobs coverage.
-- `FREELANCER_OAUTH_TOKEN`: optional Freelancer.com API access.
-- `CONTACT_EMAIL`: contact address included in the user agent.
+| Name | Purpose |
+|---|---|
+| `JOB_KEYWORDS` | Comma-separated target keywords. |
+| `MAX_PER_SOURCE` | Maximum jobs per source. |
+| `CONTACT_EMAIL` | Contact address included in the user agent. |
+| `DB_PATH` | SQLite DB path. Defaults to `data/jobs.db`. |
+
+No secret is required for the default public/API-first production run.
 
 ## Architecture
 
@@ -72,27 +63,27 @@ See `docs/architecture.md`.
 
 ```mermaid
 flowchart LR
-  A[Scheduled/manual collector] --> B[Source connectors]
+  A[Scheduled/manual collector] --> B[Public API connectors]
   B --> C[Normalizer]
-  C --> D[Scoring and draft generation]
+  C --> D[Scoring and proposal draft]
   D --> E[(SQLite jobs.db)]
   E --> F[FastAPI JSON API]
   E --> G[Web dashboard]
   H[GitHub Actions] --> A
-  H --> I[Tests and lint]
-  H --> J[DB artifact upload]
+  H --> I[Syntax check and pytest]
+  H --> J[DB and summary artifact]
 ```
 
 ## Testing
 
 ```bash
-ruff check .
+python -m compileall app scripts tests
 pytest -q
 ```
 
 ## GitHub Actions
 
-- `.github/workflows/ci.yml`: lint and tests on push, pull request, and manual run.
+- `.github/workflows/ci.yml`: syntax check and tests on push, pull request, and manual run.
 - `.github/workflows/collect.yml`: manual/scheduled collection and SQLite artifact upload.
 
 ## Safety principles
