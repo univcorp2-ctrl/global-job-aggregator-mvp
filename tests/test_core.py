@@ -10,7 +10,9 @@ def test_enrich_job_scores_ai_automation_role() -> None:
         compensation="$120/hr",
         description="Build OpenAI API integrations with LangChain, vector database search, and n8n.",
     )
+
     enrich_job(job)
+
     assert job.ai_relevance >= 40
     assert job.application_priority in {"A", "B"}
     assert "OpenAI API" in job.required_skills
@@ -31,6 +33,7 @@ def test_upsert_and_list_jobs(tmp_path) -> None:
             description="OpenAI API and vector database project",
         )
     )
+
     with connect(db_path) as conn:
         assert upsert_job(conn, job) is True
         rows = list_jobs(conn, q="rag")
@@ -38,5 +41,6 @@ def test_upsert_and_list_jobs(tmp_path) -> None:
         assert rows[0]["title"] == "RAG Engineer"
         assert rows[0]["required_skills"]
         detail = get_job(conn, rows[0]["id"])
-        assert detail is not None
-        assert detail["company"] == "Demo"
+
+    assert detail is not None
+    assert detail["company"] == "Demo"
