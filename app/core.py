@@ -39,6 +39,7 @@ TAG_RE = re.compile(r"<[^>]+>")
 SPACE_RE = re.compile(r"\s+")
 HOURLY_RE = re.compile(r"(?:\$|USD\s*)?(\d{2,4})(?:\.\d+)?\s*(?:/|per)?\s*(?:hour|hr)", re.I)
 ANNUAL_RE = re.compile(r"(?:\$|USD\s*)?(\d{2,3})(?:,?\d{3}|k)\b", re.I)
+
 SKILL_PATTERNS: dict[str, int] = {
     "AI Agent": 10,
     "RAG": 9,
@@ -157,9 +158,9 @@ def env_int(name: str, default: int) -> int:
 class Settings:
     db_path: Path = Path("data/jobs.db")
     keywords: list[str] = field(default_factory=lambda: DEFAULT_KEYWORDS.copy())
-    max_per_source: int = 50
-    request_delay_seconds: float = 0.7
-    http_timeout_seconds: float = 20.0
+    max_per_source: int = 20
+    request_delay_seconds: float = 0.2
+    http_timeout_seconds: float = 15.0
     contact_email: str = "you@example.com"
     greenhouse_boards: list[str] = field(default_factory=list)
     lever_companies: list[str] = field(default_factory=list)
@@ -169,13 +170,13 @@ class Settings:
     cooldown_hours: dict[str, float] = field(default_factory=dict)
 
     @classmethod
-    def from_env(cls) -> Settings:
+    def from_env(cls) -> "Settings":
         return cls(
             db_path=Path(os.getenv("DB_PATH", "data/jobs.db")),
             keywords=parse_csv(os.getenv("JOB_KEYWORDS")) or DEFAULT_KEYWORDS.copy(),
-            max_per_source=env_int("MAX_PER_SOURCE", 50),
-            request_delay_seconds=env_float("REQUEST_DELAY_SECONDS", 0.7),
-            http_timeout_seconds=env_float("HTTP_TIMEOUT_SECONDS", 20.0),
+            max_per_source=env_int("MAX_PER_SOURCE", 20),
+            request_delay_seconds=env_float("REQUEST_DELAY_SECONDS", 0.2),
+            http_timeout_seconds=env_float("HTTP_TIMEOUT_SECONDS", 15.0),
             contact_email=os.getenv("CONTACT_EMAIL", "you@example.com"),
             greenhouse_boards=parse_csv(os.getenv("GREENHOUSE_BOARDS")),
             lever_companies=parse_csv(os.getenv("LEVER_COMPANIES")),
@@ -186,7 +187,6 @@ class Settings:
                 "himalayas": env_float("HIMALAYAS_COOLDOWN_HOURS", 1),
                 "jobicy": env_float("JOBICY_COOLDOWN_HOURS", 1),
                 "arbeitnow": env_float("ARBEITNOW_COOLDOWN_HOURS", 1),
-                "remotive": env_float("REMOTIVE_COOLDOWN_HOURS", 6),
                 "greenhouse": env_float("ATS_COOLDOWN_HOURS", 6),
                 "lever": env_float("ATS_COOLDOWN_HOURS", 6),
                 "ashby": env_float("ATS_COOLDOWN_HOURS", 6),
@@ -197,7 +197,7 @@ class Settings:
 
     @property
     def user_agent(self) -> str:
-        return f"GlobalJobAggregatorMVP/0.1 (+mailto:{self.contact_email})"
+        return f"GlobalJobAggregatorMVP/1.0 (+mailto:{self.contact_email})"
 
 
 @dataclass(slots=True)
@@ -260,8 +260,7 @@ def compact(value: str | None) -> str | None:
 def strip_html(value: str | None) -> str | None:
     if not value:
         return value
-    text = TAG_RE.sub(" ", value)
-    return compact(html.unescape(text))
+    return compact(html.unescape(TAG_RE.sub(" ", value)))
 
 
 def join_values(values: Iterable[Any] | None, sep: str = ", ") -> str | None:
@@ -317,22 +316,28 @@ def build_proposal(job: NormalizedJob) -> str:
     skills = ", ".join(job.required_skills[:5]) or "AI automation and data workflows"
     company = f" at {job.company}" if job.company else ""
     return (
-        f"Hi, I found your {job.title}{company} opportunity and it looks aligned with my work in "
-        f"{skills}. I can help turn fragmented web/API data into reliable automations, dashboards, "
-        "and business-ready reports using Python, APIs, AI tools, and spreadsheet/database workflows. "
-        "I would start by clarifying the target outcome, building a small reliable pipeline, then adding "
-        "monitoring and a clean handoff so the system stays maintainable."
+        f"Hi, I found your {job.title}{company} opportunity and it looks aligned with my work in {skills}.\n"
+        "I can help turn fragmented web/API data into reliable automations, dashboards, "
+        "and business-ready reports using Python, APIs, AI tools, and spreadsheet/database workflows."
     )
 
 
 def enrich_job(job: NormalizedJob) -> NormalizedJob:
-    text = strip_html(" ".join(str(v) for v in [job.title, job.company, job.description, job.contract_type, job.compensation] if v)) or ""
+    text = strip_html(
+        " ".join(
+            str(v)
+            for v in [job.title, job.company, job.description, job.contract_type, job.compensation]
+            if v
+        )
+    ) or ""
     skills = detect_skills(text)
     job.required_skills = list(dict.fromkeys(job.required_skills + skills))
     job.ai_relevance = score_text(text)
     job.fit_score = min(100.0, job.ai_relevance + (15 if "Real Estate" in job.required_skills else 0))
     job.expected_monthly_income = job.expected_monthly_income or estimate_monthly_income(job.compensation)
-    total = job.ai_relevance + job.fit_score + (10 if job.compensation and ("$" in job.compensation or "USD" in job.compensation.upper()) else 0)
+    total = job.ai_relevance + job.fit_score
+    if job.compensation and ("$" in job.compensation or "USD" in job.compensation.upper()):
+        total += 10
     job.application_priority = "A" if total >= 85 else "B" if total >= 55 else "C"
     job.proposal_draft = job.proposal_draft or build_proposal(job)
     return job
@@ -357,7 +362,9 @@ def upsert_job(conn: sqlite3.Connection, job: NormalizedJob) -> bool:
     record = job.to_record()
     placeholders = ", ".join(f":{col}" for col in JOB_COLUMNS)
     columns = ", ".join(JOB_COLUMNS)
-    updates = ", ".join(f"{col}=excluded.{col}" for col in JOB_COLUMNS if col not in {"source", "external_id", "status"})
+    updates = ", ".join(
+        f"{col}=excluded.{col}" for col in JOB_COLUMNS if col not in {"source", "external_id", "status"}
+    )
     sql = f"""
     INSERT INTO jobs ({columns}) VALUES ({placeholders})
     ON CONFLICT(source, external_id) DO UPDATE SET {updates}, status=jobs.status
@@ -380,12 +387,23 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     return item
 
 
-def list_jobs(conn: sqlite3.Connection, *, q: str | None = None, source: str | None = None, status: str | None = None, priority: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+def list_jobs(
+    conn: sqlite3.Connection,
+    *,
+    q: str | None = None,
+    source: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
     conditions: list[str] = []
     params: dict[str, Any] = {"limit": max(1, min(limit, 500))}
     if q:
         params["q"] = f"%{q.lower()}%"
-        conditions.append("(lower(title) LIKE :q OR lower(company) LIKE :q OR lower(description) LIKE :q OR lower(required_skills) LIKE :q)")
+        conditions.append(
+            "(lower(title) LIKE :q OR lower(company) LIKE :q OR lower(description) LIKE :q "
+            "OR lower(required_skills) LIKE :q)"
+        )
     if source:
         conditions.append("source = :source")
         params["source"] = source
@@ -416,7 +434,14 @@ def source_counts(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def record_source_run(conn: sqlite3.Connection, source: str, *, status: str, count: int, error: str | None = None) -> None:
+def record_source_run(
+    conn: sqlite3.Connection,
+    source: str,
+    *,
+    status: str,
+    count: int,
+    error: str | None = None,
+) -> None:
     now = utc_now()
     success = now if status == "success" else None
     conn.execute(
@@ -430,7 +455,14 @@ def record_source_run(conn: sqlite3.Connection, source: str, *, status: str, cou
             last_error=excluded.last_error,
             last_count=excluded.last_count
         """,
-        {"source": source, "attempt": now, "success": success, "status": status, "error": error, "count": count},
+        {
+            "source": source,
+            "attempt": now,
+            "success": success,
+            "status": status,
+            "error": error,
+            "count": count,
+        },
     )
     conn.commit()
 
@@ -454,7 +486,14 @@ class Connector(ABC):
         raise NotImplementedError
 
 
-async def request_json(client: httpx.AsyncClient, url: str, *, params: dict[str, Any] | None = None, headers: dict[str, str] | None = None, retries: int = 2) -> dict[str, Any]:
+async def request_json(
+    client: httpx.AsyncClient,
+    url: str,
+    *,
+    params: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
+    retries: int = 2,
+) -> dict[str, Any]:
     for attempt in range(retries + 1):
         response = await client.get(url, params=params, headers=headers)
         if response.status_code in {429, 500, 502, 503, 504} and attempt < retries:
@@ -470,26 +509,39 @@ def default_headers(settings: Settings) -> dict[str, str]:
     return {"User-Agent": settings.user_agent, "Accept": "application/json"}
 
 
-async def polite_sleep(settings: Settings) -> None:
-    if settings.request_delay_seconds > 0:
-        await asyncio.sleep(settings.request_delay_seconds)
-
-
 class HimalayasConnector(Connector):
     name = "himalayas"
     endpoint = "https://himalayas.app/jobs/api/search"
 
     async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
         jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords:
-            data = await request_json(client, self.endpoint, params={"q": keyword, "sort": "recent", "page": 1}, headers=default_headers(settings))
+        for keyword in settings.keywords[:3]:
+            data = await request_json(
+                client,
+                self.endpoint,
+                params={"q": keyword, "sort": "recent", "page": 1},
+                headers=default_headers(settings),
+            )
             for item in data.get("jobs", []):
                 locations = item.get("locationRestrictions") or []
-                salary = salary_range(item.get("minSalary"), item.get("maxSalary"), item.get("currency") or "USD")
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("guid") or item.get("applicationLink") or item.get("title")), title=item.get("title") or "Untitled", company=item.get("companyName"), url=item.get("applicationLink"), location=join_values(locations) or "Worldwide", compensation=salary, contract_type=item.get("employmentType"), remote="remote", japan_ok="yes" if not locations or "japan" in ",".join(locations).lower() else "unknown", description=strip_html(item.get("description") or item.get("excerpt")), published_at=item.get("pubDate"), raw=item))
+                jobs.append(
+                    NormalizedJob(
+                        source=self.name,
+                        external_id=str(item.get("guid") or item.get("applicationLink") or item.get("title")),
+                        title=item.get("title") or "Untitled",
+                        company=item.get("companyName"),
+                        url=item.get("applicationLink"),
+                        location=join_values(locations) or "Worldwide",
+                        contract_type=item.get("employmentType"),
+                        remote="remote",
+                        japan_ok="yes" if not locations or "japan" in ",".join(locations).lower() else "unknown",
+                        description=strip_html(item.get("description") or item.get("excerpt")),
+                        published_at=item.get("pubDate"),
+                        raw=item,
+                    )
+                )
                 if len(jobs) >= settings.max_per_source:
                     return jobs
-            await polite_sleep(settings)
         return jobs
 
 
@@ -499,32 +551,40 @@ class JobicyConnector(Connector):
 
     async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
         jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords:
-            data = await request_json(client, self.endpoint, params={"count": min(settings.max_per_source, 100), "tag": keyword}, headers=default_headers(settings))
+        for keyword in settings.keywords[:3]:
+            data = await request_json(
+                client,
+                self.endpoint,
+                params={"count": min(settings.max_per_source, 50), "tag": keyword},
+                headers=default_headers(settings),
+            )
             for item in data.get("jobs", []):
                 geo = item.get("jobGeo") or "Anywhere"
-                salary = salary_range(item.get("salaryMin"), item.get("salaryMax"), item.get("salaryCurrency") or "USD", item.get("salaryPeriod"))
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("id") or item.get("url") or item.get("jobTitle")), title=item.get("jobTitle") or "Untitled", company=item.get("companyName"), url=item.get("url"), location=geo, compensation=salary, contract_type=item.get("jobType"), remote="remote", japan_ok="yes" if str(geo).lower() in {"anywhere", "worldwide"} else "unknown", description=strip_html(item.get("jobDescription") or item.get("jobExcerpt")), published_at=item.get("pubDate"), raw=item))
+                salary = salary_range(
+                    item.get("salaryMin"),
+                    item.get("salaryMax"),
+                    item.get("salaryCurrency") or "USD",
+                    item.get("salaryPeriod"),
+                )
+                jobs.append(
+                    NormalizedJob(
+                        source=self.name,
+                        external_id=str(item.get("id") or item.get("url") or item.get("jobTitle")),
+                        title=item.get("jobTitle") or "Untitled",
+                        company=item.get("companyName"),
+                        url=item.get("url"),
+                        location=geo,
+                        compensation=salary,
+                        contract_type=item.get("jobType"),
+                        remote="remote",
+                        japan_ok="yes" if str(geo).lower() in {"anywhere", "worldwide"} else "unknown",
+                        description=strip_html(item.get("jobDescription") or item.get("jobExcerpt")),
+                        published_at=item.get("pubDate"),
+                        raw=item,
+                    )
+                )
                 if len(jobs) >= settings.max_per_source:
                     return jobs
-            await polite_sleep(settings)
-        return jobs
-
-
-class RemotiveConnector(Connector):
-    name = "remotive"
-    endpoint = "https://remotive.com/api/remote-jobs"
-
-    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
-        jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords[:3]:
-            data = await request_json(client, self.endpoint, params={"search": keyword, "limit": min(settings.max_per_source, 25)}, headers=default_headers(settings))
-            for item in data.get("jobs", []):
-                location = item.get("candidate_required_location") or "Worldwide"
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("id") or item.get("url") or item.get("title")), title=item.get("title") or "Untitled", company=item.get("company_name"), url=item.get("url"), location=location, compensation=item.get("salary"), contract_type=item.get("job_type"), remote="remote", japan_ok="yes" if str(location).lower() in {"worldwide", "anywhere"} else "unknown", description=strip_html(item.get("description")), published_at=item.get("publication_date"), raw=item))
-                if len(jobs) >= settings.max_per_source:
-                    return jobs
-            await polite_sleep(settings)
         return jobs
 
 
@@ -542,119 +602,25 @@ class ArbeitnowConnector(Connector):
             searchable = f"{title} {description} {' '.join(tags)}".lower()
             if not any(keyword.lower() in searchable for keyword in settings.keywords):
                 continue
-            jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("slug") or item.get("url") or title), title=title, company=item.get("company_name"), url=item.get("url"), location=item.get("location"), contract_type=join_values(item.get("job_types") or []), remote="remote" if item.get("remote") else "unknown", japan_ok="unknown", required_skills=[str(tag) for tag in tags], description=description, published_at=str(item.get("created_at")) if item.get("created_at") else None, raw=item))
+            jobs.append(
+                NormalizedJob(
+                    source=self.name,
+                    external_id=str(item.get("slug") or item.get("url") or title),
+                    title=title,
+                    company=item.get("company_name"),
+                    url=item.get("url"),
+                    location=item.get("location"),
+                    contract_type=join_values(item.get("job_types") or []),
+                    remote="remote" if item.get("remote") else "unknown",
+                    japan_ok="unknown",
+                    required_skills=[str(tag) for tag in tags],
+                    description=description,
+                    published_at=str(item.get("created_at")) if item.get("created_at") else None,
+                    raw=item,
+                )
+            )
             if len(jobs) >= settings.max_per_source:
                 return jobs
-        return jobs
-
-
-class GreenhouseConnector(Connector):
-    name = "greenhouse"
-
-    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
-        jobs: list[NormalizedJob] = []
-        for board in settings.greenhouse_boards:
-            try:
-                data = await request_json(client, f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs", params={"content": "true"}, headers=default_headers(settings))
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
-                    continue
-                raise
-            for item in data.get("jobs", []):
-                location = (item.get("location") or {}).get("name")
-                offices = [office.get("location") or office.get("name") for office in item.get("offices", [])]
-                text = f"{location or ''} {' '.join(str(v) for v in offices)}".lower()
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("id") or item.get("absolute_url")), title=item.get("title") or "Untitled", company=board, url=item.get("absolute_url"), location=location or join_values(offices), contract_type=join_values([dept.get("name") for dept in item.get("departments", []) if dept.get("name")]), remote="remote" if "remote" in text else "unknown", japan_ok="yes" if any(token in text for token in ["remote", "worldwide", "japan"]) else "unknown", description=strip_html(item.get("content")), published_at=item.get("updated_at"), raw=item))
-                if len(jobs) >= settings.max_per_source:
-                    return jobs
-            await polite_sleep(settings)
-        return jobs
-
-
-class LeverConnector(Connector):
-    name = "lever"
-
-    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
-        jobs: list[NormalizedJob] = []
-        for company in settings.lever_companies:
-            try:
-                data = await request_json(client, f"https://api.lever.co/v0/postings/{company}", params={"mode": "json"}, headers=default_headers(settings))
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
-                    continue
-                raise
-            for item in data.get("items", []):
-                location = safe_get(item, ["categories", "location"])
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("id") or item.get("hostedUrl") or item.get("text")), title=item.get("text") or "Untitled", company=company, url=item.get("hostedUrl") or item.get("applyUrl"), location=location, contract_type=safe_get(item, ["categories", "commitment"]) or safe_get(item, ["categories", "team"]), remote="remote" if "remote" in str(location).lower() else "unknown", japan_ok="yes" if "remote" in str(location).lower() else "unknown", description=strip_html(item.get("descriptionPlain") or item.get("description")), published_at=str(item.get("createdAt")) if item.get("createdAt") else None, raw=item))
-                if len(jobs) >= settings.max_per_source:
-                    return jobs
-            await polite_sleep(settings)
-        return jobs
-
-
-class AshbyConnector(Connector):
-    name = "ashby"
-
-    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
-        jobs: list[NormalizedJob] = []
-        for board in settings.ashby_boards:
-            try:
-                data = await request_json(client, f"https://api.ashbyhq.com/posting-api/job-board/{board}", params={"includeCompensation": "true"}, headers=default_headers(settings))
-            except httpx.HTTPStatusError as exc:
-                if exc.response.status_code == 404:
-                    continue
-                raise
-            for item in data.get("jobs", []):
-                compensation = ashby_compensation(item)
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("jobUrl") or item.get("applyUrl") or item.get("title")), title=item.get("title") or "Untitled", company=board, url=item.get("jobUrl") or item.get("applyUrl"), location=item.get("location") or ashby_address(item), compensation=compensation, contract_type=item.get("employmentType") or item.get("department"), remote="remote" if item.get("isRemote") else compact(item.get("workplaceType")), japan_ok="yes" if item.get("isRemote") else "unknown", description=strip_html(item.get("descriptionPlain") or item.get("descriptionHtml")), published_at=item.get("publishedAt"), raw=item))
-                if len(jobs) >= settings.max_per_source:
-                    return jobs
-            await polite_sleep(settings)
-        return jobs
-
-
-class SerpApiConnector(Connector):
-    name = "serpapi"
-    endpoint = "https://serpapi.com/search.json"
-
-    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
-        if not settings.serpapi_api_key:
-            return []
-        jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords[:5]:
-            data = await request_json(client, self.endpoint, params={"engine": "google_jobs", "q": f"{keyword} remote contract", "hl": "en", "gl": "us", "api_key": settings.serpapi_api_key, "no_cache": "false"}, headers=default_headers(settings))
-            for item in data.get("jobs_results", []):
-                options = item.get("apply_options") or []
-                url = (options[0] or {}).get("link") if options else item.get("share_link")
-                extensions = item.get("extensions") or []
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("job_id") or item.get("share_link") or item.get("title")), title=item.get("title") or "Untitled", company=item.get("company_name"), url=url, location=item.get("location"), compensation=join_values([ext for ext in extensions if "$" in str(ext)]), contract_type=(item.get("detected_extensions") or {}).get("schedule_type") or join_values(extensions), remote="remote" if "remote" in str(item.get("location", "")).lower() else "unknown", japan_ok="unknown", description=strip_html(item.get("description")), published_at=(item.get("detected_extensions") or {}).get("posted_at"), raw=item))
-                if len(jobs) >= settings.max_per_source:
-                    return jobs
-            await polite_sleep(settings)
-        return jobs
-
-
-class FreelancerConnector(Connector):
-    name = "freelancer"
-    endpoint = "https://www.freelancer.com/api/projects/0.1/projects/active/"
-
-    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
-        if not settings.freelancer_oauth_token:
-            return []
-        headers = default_headers(settings)
-        headers["Authorization"] = f"Bearer {settings.freelancer_oauth_token}"
-        jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords[:5]:
-            data = await request_json(client, self.endpoint, params={"query": keyword, "limit": min(settings.max_per_source, 50), "full_description": "true"}, headers=headers)
-            result = data.get("result") or data
-            for item in result.get("projects", result.get("items", [])):
-                budget = item.get("budget") or {}
-                currency = (budget.get("currency") or {}).get("code") or "USD"
-                salary = salary_range(budget.get("minimum"), budget.get("maximum"), currency)
-                jobs.append(NormalizedJob(source=self.name, external_id=str(item.get("id") or item.get("seo_url") or item.get("title")), title=item.get("title") or "Untitled", company=str(item.get("owner_id")) if item.get("owner_id") else None, url=f"https://www.freelancer.com/projects/{item.get('seo_url')}" if item.get("seo_url") else None, compensation=salary, contract_type=item.get("type"), remote="remote", japan_ok="unknown", description=strip_html(item.get("description")), published_at=str(item.get("submitdate")) if item.get("submitdate") else None, raw=item))
-                if len(jobs) >= settings.max_per_source:
-                    return jobs
-            await polite_sleep(settings)
         return jobs
 
 
@@ -669,25 +635,8 @@ def salary_range(minimum: Any, maximum: Any, currency: str = "USD", period: str 
     return None
 
 
-def ashby_address(item: dict[str, Any]) -> str | None:
-    postal = ((item.get("address") or {}).get("postalAddress") or {})
-    return join_values([postal.get("addressLocality"), postal.get("addressRegion"), postal.get("addressCountry")])
-
-
-def ashby_compensation(item: dict[str, Any]) -> str | None:
-    compensation = item.get("compensation") or {}
-    if isinstance(compensation, dict):
-        for key in ["compensationTierSummary", "scrapeableCompensationSalarySummary"]:
-            if compensation.get(key):
-                return str(compensation[key])
-    for key in ["compensationTierSummary", "scrapeableCompensationSalarySummary"]:
-        if item.get(key):
-            return str(item[key])
-    return None
-
-
 def default_connectors() -> list[Connector]:
-    return [HimalayasConnector(), JobicyConnector(), ArbeitnowConnector(), RemotiveConnector(), GreenhouseConnector(), LeverConnector(), AshbyConnector(), SerpApiConnector(), FreelancerConnector()]
+    return [HimalayasConnector(), JobicyConnector(), ArbeitnowConnector()]
 
 
 @dataclass
@@ -711,8 +660,17 @@ class CollectSummary:
     def fetched_total(self) -> int:
         return sum(result.fetched for result in self.results)
 
+    @property
+    def error_total(self) -> int:
+        return sum(1 for result in self.results if result.error)
+
     def as_dict(self) -> dict[str, Any]:
-        return {"fetched_total": self.fetched_total, "saved_total": self.saved_total, "results": [result.__dict__ for result in self.results]}
+        return {
+            "fetched_total": self.fetched_total,
+            "saved_total": self.saved_total,
+            "error_total": self.error_total,
+            "results": [result.__dict__ for result in self.results],
+        }
 
 
 def dedupe_jobs(jobs: Iterable[NormalizedJob]) -> list[NormalizedJob]:
@@ -727,7 +685,12 @@ def dedupe_jobs(jobs: Iterable[NormalizedJob]) -> list[NormalizedJob]:
     return unique
 
 
-async def collect_all(*, settings: Settings | None = None, connectors: list[Connector] | None = None, force: bool = False) -> CollectSummary:
+async def collect_all(
+    *,
+    settings: Settings | None = None,
+    connectors: list[Connector] | None = None,
+    force: bool = False,
+) -> CollectSummary:
     settings = settings or Settings.from_env()
     connectors = connectors or default_connectors()
     init_db(settings.db_path)
@@ -748,8 +711,10 @@ async def collect_all(*, settings: Settings | None = None, connectors: list[Conn
                         if upsert_job(conn, job):
                             saved += 1
                     record_source_run(conn, connector.name, status="success", count=len(fetched_jobs))
-                    summary.results.append(SourceResult(source=connector.name, fetched=len(fetched_jobs), saved=saved))
-                except Exception as exc:
+                    summary.results.append(
+                        SourceResult(source=connector.name, fetched=len(fetched_jobs), saved=saved)
+                    )
+                except Exception as exc:  # keep scheduled collector production-runnable
                     message = f"{type(exc).__name__}: {exc}"
                     record_source_run(conn, connector.name, status="error", count=0, error=message)
                     summary.results.append(SourceResult(source=connector.name, error=message))
@@ -757,12 +722,17 @@ async def collect_all(*, settings: Settings | None = None, connectors: list[Conn
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Collect jobs into SQLite")
+    parser = argparse.ArgumentParser(description="Collect public/API-first job opportunities into SQLite")
     parser.add_argument("--force", action="store_true", help="Ignore source cooldowns")
+    parser.add_argument("--summary-path", default="data/collection-summary.json")
     return parser.parse_args()
 
 
 def cli_main() -> None:
     args = parse_args()
     summary = asyncio.run(collect_all(force=args.force))
-    print(summary.as_dict())
+    output = summary.as_dict()
+    summary_path = Path(args.summary_path)
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
+    summary_path.write_text(json.dumps(output, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(output, ensure_ascii=False, indent=2))
