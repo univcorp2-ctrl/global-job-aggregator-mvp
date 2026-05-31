@@ -21,18 +21,19 @@ jobs:
           pip install -r requirements.txt
       - name: Collect jobs
         env:
-          SERPAPI_API_KEY: ${{ secrets.SERPAPI_API_KEY }}
-          FREELANCER_OAUTH_TOKEN: ${{ secrets.FREELANCER_OAUTH_TOKEN }}
-          GREENHOUSE_BOARDS: ${{ vars.GREENHOUSE_BOARDS }}
-          LEVER_COMPANIES: ${{ vars.LEVER_COMPANIES }}
-          ASHBY_BOARDS: ${{ vars.ASHBY_BOARDS }}
           CONTACT_EMAIL: ${{ vars.CONTACT_EMAIL }}
+          JOB_KEYWORDS: ${{ vars.JOB_KEYWORDS }}
+          MAX_PER_SOURCE: ${{ vars.MAX_PER_SOURCE }}
         run: |
           mkdir -p data
-          python scripts/collect_once.py --force
-      - name: Upload SQLite DB
+          python scripts/collect_once.py --force --summary-path data/collection-summary.json
+          test -f data/jobs.db
+          test -f data/collection-summary.json
+      - name: Upload SQLite DB and summary
         uses: actions/upload-artifact@v4
         with:
           name: jobs-sqlite-db
-          path: data/jobs.db
+          path: |
+            data/jobs.db
+            data/collection-summary.json
           if-no-files-found: error
