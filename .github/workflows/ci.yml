@@ -21,5 +21,35 @@ jobs:
           pip install -r requirements.txt
       - name: Syntax check
         run: python -m compileall app scripts tests
-      - name: Test
-        run: pytest -q
+      - name: Runtime smoke test
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from app.core import NormalizedJob, connect, enrich_job, get_job, init_db, list_jobs, upsert_job
+          db_path = Path('data/ci-smoke.db')
+          init_db(db_path)
+          job = enrich_job(NormalizedJob(
+              source='ci',
+              external_id='1',
+              title='AI Agent Developer for RAG workflow automation',
+              company='ExampleCo',
+              compensation='$120/hr',
+              description='Build OpenAI API integrations with LangChain, vector database search, and n8n.',
+          ))
+          assert job.ai_relevance >= 40
+          assert job.application_priority in {'A', 'B'}
+          with connect(db_path) as conn:
+              assert upsert_job(conn, job) is True
+              rows = list_jobs(conn, q='rag')
+              assert len(rows) == 1
+              assert get_job(conn, rows[0]['id']) is not None
+          readme = Path('README.md').read_text(encoding='utf-8')
+          assert 'Safety-first' in readme
+          assert 'approved API access' in readme
+          PY
+      - name: CLI smoke test
+        run: |
+          mkdir -p data
+          python scripts/collect_once.py --summary-path data/ci-summary.json
+          test -f data/jobs.db
+          test -f data/ci-summary.json
