@@ -1,6 +1,12 @@
 name: Collect jobs
 
 on:
+  push:
+    paths:
+      - 'app/**'
+      - 'scripts/**'
+      - 'requirements.txt'
+      - '.github/workflows/collect.yml'
   schedule:
     - cron: '17 2 * * *'
   workflow_dispatch:
