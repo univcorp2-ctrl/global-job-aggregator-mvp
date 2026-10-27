@@ -350,4 +350,4 @@ class DelegationPlan(BaseModel):
 def api_evaluate_delegation(payload: DelegationPlan,
                             x_worker_token: str | None = Header(default=None)):
     _require_worker_token(x_worker_token)
-    return evaluate_delegation(DelegationInput(**payload.dict()))
+    return evaluate_delegation(DelegationInput(**payload.model_dump()))
