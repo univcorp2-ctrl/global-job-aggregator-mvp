@@ -624,6 +624,87 @@ class ArbeitnowConnector(Connector):
         return jobs
 
 
+
+class RemotiveConnector(Connector):
+    """Read-only public Remotive API; links must point back to Remotive."""
+    name = "remotive"
+    endpoint = "https://remotive.com/api/remote-jobs"
+
+    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
+        data = await request_json(
+            client, self.endpoint,
+            params={"search": "automation", "limit": min(settings.max_per_source, 25)},
+            headers=default_headers(settings),
+        )
+        jobs: list[NormalizedJob] = []
+        for item in data.get("jobs", []):
+            url = item.get("url")
+            if not url or not str(url).startswith("https://remotive.com/"):
+                continue
+            location = str(item.get("candidate_required_location") or "")
+            jobs.append(NormalizedJob(
+                source=self.name,
+                external_id=str(item.get("id") or url),
+                title=item.get("title") or "Untitled",
+                company=item.get("company_name"),
+                url=url,
+                location=location,
+                compensation=item.get("salary"),
+                contract_type=item.get("job_type"),
+                remote="remote",
+                japan_ok="yes" if location.lower() in {"worldwide", "anywhere"} else "unknown",
+                description=strip_html(item.get("description")),
+                published_at=item.get("publication_date"),
+                raw=item,
+            ))
+            if len(jobs) >= settings.max_per_source:
+                break
+        return jobs
+
+
+class RemoshiftConnector(Connector):
+    """Read-only open API; always link the canonical detail_url."""
+    name = "remoshift"
+    endpoint = "https://remoshift.com/api/v1/jobs.open"
+
+    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
+        data = await request_json(
+            client, self.endpoint,
+            params={"anywhere": 1, "per": min(settings.max_per_source, 25)},
+            headers=default_headers(settings),
+        )
+        items = data.get("data") or data.get("jobs") or data.get("items") or []
+        if isinstance(items, dict):
+            items = items.get("jobs") or items.get("items") or []
+        jobs: list[NormalizedJob] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            link = item.get("detail_url")
+            if not link or not str(link).startswith("https://remoshift.com/"):
+                continue
+            jobs.append(NormalizedJob(
+                source=self.name,
+                external_id=str(item.get("id") or link),
+                title=item.get("title") or item.get("job_title") or "Untitled",
+                company=item.get("company") if isinstance(item.get("company"), str)
+                        else (item.get("company_name") or ""),
+                url=link,
+                location=item.get("location") or "Work from anywhere (verify on source)",
+                compensation=item.get("salary_text"),
+                contract_type=item.get("employment_type"),
+                remote="remote",
+                japan_ok="unknown",
+                description=strip_html(item.get("summary") or ""),
+                published_at=item.get("posted_at"),
+                raw=item,
+            ))
+            if len(jobs) >= settings.max_per_source:
+                break
+        return jobs
+
+
+
 def salary_range(minimum: Any, maximum: Any, currency: str = "USD", period: str | None = None) -> str | None:
     suffix = f" per {period}" if period else ""
     if minimum and maximum:
@@ -636,7 +717,7 @@ def salary_range(minimum: Any, maximum: Any, currency: str = "USD", period: str 
 
 
 def default_connectors() -> list[Connector]:
-    return [HimalayasConnector(), JobicyConnector(), ArbeitnowConnector()]
+    return [HimalayasConnector(), JobicyConnector(), ArbeitnowConnector(), RemotiveConnector(), RemoshiftConnector()]
 
 
 @dataclass
