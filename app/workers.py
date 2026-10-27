@@ -93,10 +93,19 @@ CREATE TABLE IF NOT EXISTS contact_drafts (
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
+class WorkerConnection(sqlite3.Connection):
+    """Ensure Windows releases SQLite handles after a with-statement."""
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
+
+
 def connect_workers(path: str | Path) -> sqlite3.Connection:
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
-    db = sqlite3.connect(str(dest))
+    db = sqlite3.connect(str(dest), factory=WorkerConnection)
     db.row_factory = sqlite3.Row
     db.executescript(DDL)
     return db
