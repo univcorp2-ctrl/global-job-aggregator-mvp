@@ -575,7 +575,7 @@ class JobicyConnector(Connector):
                         url=item.get("url"),
                         location=geo,
                         compensation=salary,
-                        contract_type=item.get("jobType"),
+                        contract_type=(join_values(item.get("jobType")) if isinstance(item.get("jobType"), list) else compact(item.get("jobType"))),
                         remote="remote",
                         japan_ok="yes" if str(geo).lower() in {"anywhere", "worldwide"} else "unknown",
                         description=strip_html(item.get("jobDescription") or item.get("jobExcerpt")),
