@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.workers import connect_workers, register_worker, search_workers, match_workers, prepare_contact, provider_capabilities
 from app.supply_connectors import freelancer_search
 from app.delegation import DelegationInput, evaluate_delegation
+from app.market import compare_opportunities, scenario_roi
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -351,3 +352,64 @@ def api_evaluate_delegation(payload: DelegationPlan,
                             x_worker_token: str | None = Header(default=None)):
     _require_worker_token(x_worker_token)
     return evaluate_delegation(DelegationInput(**payload.model_dump()))
+
+
+# Aggregate service-market hypotheses only. No personal supplier profiles.
+@app.get("/api/market/opportunities")
+def api_market_opportunities(limit: int = Query(default=25, ge=1, le=50),
+                             region: str | None = None):
+    return compare_opportunities(limit=limit,market=region)
+
+
+@app.get("/market",response_class=HTMLResponse)
+def market_dashboard() -> str:
+    data=compare_opportunities()
+    rows=[]
+    for opportunity in data["opportunities"]:
+        label=text(opportunity["category"])
+        rows.append(
+            "<tr><td><strong>"+text(opportunity["priority_score"])+"</strong></td>"
+            "<td>"+label+"</td><td>"+text(opportunity["geography"])+"</td>"
+            "<td>"+text(opportunity["ai_fit"])+"/5 (hypothesis)</td>"
+            "<td>"+text(opportunity["worker_supply"])+"/5 (not verified)</td>"
+            "<td>"+text(opportunity["value_metrics"])+"</td>"
+            "<td>"+text(opportunity["next_test"])+"</td></tr>"
+        )
+    body=(
+        "<section class='hero'><div><h1>Market opportunities</h1>"
+        "<p>17 Japan/global categories • as of 2026-10-27 • "
+        "published research judgement, NOT revenue forecasts or actual contracts.</p>"
+        "</div></section>"
+        "<div class='card'><p>Weights: Demand 25%, willingness to pay 15%, "
+        "AI delivery 20%, available worker supply 10%, measurable outcomes 20%, "
+        "compliance 10%. The 1–5 scores are hypotheses to prioritize validation. "
+        "No real hireable worker is yet authorized in the private supply database.</p></div>"
+        "<div class='table'><table><thead><tr>"
+        "<th>Score/100</th><th>Service</th><th>Market</th>"
+        "<th>AI fit</th><th>Human supply</th><th>Measurable outcome</th>"
+        "<th>Next experiment</th></tr></thead><tbody>"
+        + "".join(rows) +
+        "</tbody></table></div>"
+    )
+    return layout("Market analysis",body)
+
+
+class MarketScenario(BaseModel):
+    customer_price: float=Field(ge=0)
+    contractor_cost: float=Field(default=0,ge=0)
+    ai_api_cost: float=Field(default=0,ge=0)
+    human_qa_cost: float=Field(default=0,ge=0)
+    marketplace_fee: float=Field(default=0,ge=0)
+    acquisition_cost: float=Field(default=0,ge=0)
+    support_cost: float=Field(default=0,ge=0)
+    contingency: float=Field(default=0,ge=0)
+    hours_before: float=Field(default=0,ge=0)
+    estimated_hours_after: float=Field(default=0,ge=0)
+    labor_cost_per_hour: float=Field(default=0,ge=0)
+
+
+@app.post("/api/market/scenario")
+def api_market_scenario(payload: MarketScenario,
+                        x_worker_token: str | None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    return scenario_roi(**payload.model_dump())
