@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <meta name="description" content="自律収益エージェントのバックグラウンド稼働状況・収集件数・収益化の進捗を確認するダッシュボード。">
+  <title>Revenue Agent | Operations</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Revenue Agent Operations">
+        <span class="brand-glyph">RA</span>
+        <span><strong>REVENUE<span class="brand-dot">.</span>AGENT</strong><small>OPERATIONS CONTROL</small></span>
+      </a>
+      <div class="top-actions"><span class="last-synced" id="lastUpdated">データを取得中</span><span id="livePill" class="pill pill-muted"><span class="pulse-dot"></span> 接続確認中</span></div>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <div class="eyebrow"><span class="line"></span> REVENUE ENGINE / STATUS</div>
+          <h1>収益エージェント <span class="hero-soft">稼働モニター</span></h1>
+          <p>公式API・MCPの探索から案件選別までを自律実行。応募・受注・入金は確認済みの実績のみ表示します。</p>
+          <div class="hero-meta"><span><span class="mini-icon">◷</span> 前回の実行 <strong id="lastRun">—</strong></span><span><span class="mini-icon">↻</span> 次回の目安 <strong id="nextRun">—</strong></span></div>
+        </div>
+        <div class="runtime-block"><div class="runtime-label">エージェント状態</div><div class="runtime-value" id="runState">CHECKING</div><div class="runtime-sub" id="runtimeHint">バックグラウンド状態を確認中</div><div class="runtime-track"><div id="runtimeBar"></div></div></div>
+      </section>
+
+      <section aria-label="主な実績" class="metric-grid">
+        <article class="metric"><div class="metric-label">取得した求人 <span class="metric-icon">▦</span></div><div class="metric-value" id="jobsFetched">—</div><div class="metric-foot" id="feedsCount">公式API / 媒体別取得</div></article>
+        <article class="metric"><div class="metric-label">選別した案件候補 <span class="metric-icon">◎</span></div><div class="metric-value" id="candidates">—</div><div class="metric-foot">応募前の精査候補・未受注</div></article>
+        <article class="metric"><div class="metric-label">発見したMCP <span class="metric-icon">⌘</span></div><div class="metric-value" id="mcpFound">—</div><div class="metric-foot" id="mcpIndexed">登録候補として検索</div></article>
+        <article class="metric"><div class="metric-label">Apify商品候補 <span class="metric-icon">▣</span></div><div class="metric-value" id="apifyFound">—</div><div class="metric-foot">売上実績とは別の探索件数</div></article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel source-panel">
+          <div class="panel-header"><div><div class="panel-eyebrow">SOURCE INTEGRATIONS</div><h2>取得元の稼働状況</h2></div><span class="soft-pill" id="sourceSummary">確認中</span></div>
+          <div id="sourceList" class="source-list" aria-live="polite"><div class="empty">データ読み込み中</div></div>
+          <div class="panel-bottom"><span class="legend"><i></i> 正常</span><span class="legend"><i class="bad"></i> エラー</span><span>収集は6時間ごと</span></div>
+        </article>
+        <article class="panel history-panel">
+          <div class="panel-header"><div><div class="panel-eyebrow">DISCOVERY TREND</div><h2>取得実績の推移</h2></div><span class="soft-pill">直近の実行履歴</span></div>
+          <div class="chart-topline"><div><strong id="historyLatest">—</strong><span>直近取得数</span></div><span id="historyRange">履歴待ち</span></div>
+          <svg id="historyChart" viewBox="0 0 570 240" preserveAspectRatio="none" role="img" aria-label="実行ごとの求人取得件数グラフ"></svg>
+          <div class="chart-axis"><span id="historyFrom">—</span><span id="historyTo">—</span></div>
+          <div class="chart-note">記録された実行単位の件数です。応募や利益を表すグラフではありません。</div>
+        </article>
+      </section>
+
+      <section class="content-grid bottom-grid">
+        <article class="panel pipeline-panel">
+          <div class="panel-header"><div><div class="panel-eyebrow">AUTONOMY ROADMAP</div><h2>自動化の到達段階</h2></div><div class="stage-percent"><strong id="progressPercent">—</strong><small id="progressCount">—</small></div></div>
+          <div class="overall-progress"><div id="overallBar"></div></div>
+          <div id="stageList" class="stage-list"><div class="empty">データ読み込み中</div></div>
+          <p class="panel-caption">達成率は上記7段階の完了数で計算。未認可の応募・外注・支払いは自動実行しません。</p>
+        </article>
+        <article class="panel outcome-panel">
+          <div class="panel-header"><div><div class="panel-eyebrow">REVENUE FUNNEL</div><h2>受注・入金の実績</h2></div><span class="soft-pill">確認済みのみ</span></div>
+          <div class="funnel-list">
+            <div class="funnel-row"><div><span>01</span> 候補</div><strong id="funnelCandidates">—</strong></div>
+            <div class="funnel-row"><div><span>02</span> 応募済</div><strong id="applications">0</strong></div>
+            <div class="funnel-row"><div><span>03</span> 受注済</div><strong id="contracts">0</strong></div>
+            <div class="funnel-row"><div><span>04</span> 再委託済</div><strong id="outsourced">0</strong></div>
+          </div>
+          <div class="revenue-box"><div class="revenue-label">検証済み入金額 <span>VERIFIED PAYMENTS</span></div><div class="revenue-value" id="revenue">¥0</div><div class="revenue-explainer">受注予算・推定売上・未入金の金額は含みません。</div></div>
+        </article>
+      </section>
+
+      <footer class="footer"><span>Revenue Agent / Status-only public view</span><div class="footer-links"><a href="https://github.com/univcorp2-ctrl/global-job-aggregator-mvp" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://app.notion.com/p/40610562e58b81a38d58f4a60c2b4948" target="_blank" rel="noopener noreferrer">Notion進捗台帳</a><a href="/status.json" target="_blank" rel="noopener noreferrer">公開データJSON</a></div><span>自動更新: 5分ごとに確認</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
