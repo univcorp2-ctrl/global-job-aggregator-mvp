@@ -1,0 +1,67 @@
+name: Autonomous multi-market revenue scout
+
+on:
+  schedule:
+    # GitHub Actions, not ChatGPT Tasks. Maximum four collection cycles per day.
+    - cron: '23 1,7,13,19 * * *'
+  workflow_dispatch:
+  push:
+    paths:
+      - 'app/autonomous_agent.py'
+      - 'app/core.py'
+      - 'tests/test_autonomous_agent.py'
+      - '.github/workflows/autonomous-revenue.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: autonomous-revenue-read-only
+  cancel-in-progress: false
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      MAX_PER_SOURCE: '20'
+      REQUEST_DELAY_SECONDS: '0.3'
+      HTTP_TIMEOUT_SECONDS: '12'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install and test
+        run: |
+          pip install -r requirements.txt
+          python -m compileall -q app
+          pytest -q tests/test_autonomous_agent.py
+      - name: Discover earnings leads and MCP/Apify opportunities
+        run: |
+          python -m app.autonomous_agent --collect --output data/agent-report.json
+          test -s data/agent-report.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          data=json.loads(Path('data/agent-report.json').read_text(encoding='utf-8'))
+          assert all(v == 0 for v in data['external_calls'].values())
+          lines=[
+              '## Autonomous revenue scout (read-only)',
+              f"- Job sources: {len(data['jobs']['source_counts'])}",
+              f"- Provisional project candidates: {len(data['jobs']['shortlist'])}",
+              f"- MCP candidates (NOT installed): {len(data['mcp_catalog']['candidates'])}",
+              f"- Apify store entries: {len(data['apify_catalog']['candidates'])}",
+              '- Proposals sent: 0; contracts earned: 0 unless reconciled elsewhere.',
+              'Artifacts do not contain credentials or private workers.'
+          ]
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a',encoding='utf-8') as f:
+              f.write('\n'.join(lines) + '\n')
+          PY
+      - name: Preserve inspectable JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: autonomous-revenue-scout-${{ github.run_id }}
+          path: data/agent-report.json
+          if-no-files-found: error
+          retention-days: 7
