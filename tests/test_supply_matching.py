@@ -133,3 +133,48 @@ def test_api_worker_opt_in_and_private_lookup(monkeypatch,tmp_path):
         data=cli.get("/api/workers?skill=python",headers=headers)
         assert data.status_code==200
         assert data.json()["count"]==1
+
+
+def test_end_to_end_job_from_one_source_worker_from_another(monkeypatch,tmp_path):
+    from app.core import Settings, NormalizedJob, init_db, connect, upsert_job, list_jobs
+    secret = "local-e2e-only"
+    monkeypatch.setenv("WORKER_DB_TOKEN", secret)
+    job_db = tmp_path / "jobs.db"
+    worker_db = tmp_path / "private-workers.db"
+    monkeypatch.setattr(app_module,"settings",Settings(db_path=job_db))
+    monkeypatch.setattr(app_module,"WORKERS_DB_PATH",worker_db)
+    init_db(job_db)
+    conn = connect(job_db)
+    try:
+        upsert_job(conn,NormalizedJob(
+            source="remotive",external_id="project-2026",
+            title="Python API workflow automation",
+            url="https://remotive.com/remote-jobs/software-development/example",
+            description="Integrate OpenAI API and n8n workflows",
+        ))
+        job_id = list_jobs(conn,limit=1)[0]["id"]
+    finally:
+        conn.close()
+    headers = {"x-worker-token":secret}
+    with TestClient(app_module.app) as cli:
+        created = cli.post("/api/workers",json={
+            "platform":"opt_in","external_id":"consenting-remote-01",
+            "display_label":"Opt-in contractor",
+            "skills":["python","openai api","n8n"],"remote_ok":True,
+            "worker_opted_in":True,
+        },headers=headers)
+        assert created.status_code==200
+        worker_id=created.json()["id"]
+        result=cli.get(f"/api/matches/{job_id}",headers=headers)
+        assert result.status_code==200
+        matches=result.json()["matches"]
+        assert matches and matches[0]["worker_id"]==worker_id
+        assert "unverified" in matches[0]["status"]
+        inquiry=cli.post("/api/workers/contact-draft",
+            json={"job_id":job_id,"worker_id":worker_id},headers=headers)
+        assert inquiry.status_code==200
+        assert inquiry.json()["state"]=="prepared_not_sent"
+        assert inquiry.json()["send_enabled"] is False
+        assert inquiry.json()["needs_platform_permission"] is True
+        assert cli.post("/api/workers/contact-draft",
+            json={"job_id":job_id,"worker_id":"missing"},headers=headers).status_code==404
