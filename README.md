@@ -134,3 +134,22 @@ Five no-key sources are wired into the **production CLI path** (`scripts/collect
 - The initial operator-curated candidate shortlist and per-source HTTP checks were saved to a restricted-access Google Sheet rather than committed to GitHub.
 
 **Acceptance gates still open:** GitHub Actions CI run success, live collection artifact readback, work-eligibility review, persistence into a private long-term datastore, and any authorized application/contract/payment workflow. Do not mark them complete without evidence.
+
+## 2026-10-27 Worker supply DB and cross-platform delegation
+
+**Private-by-default implementation:** [Worker sourcing and compliance playbook](docs/worker-supply-playbook.md)
+
+The job-demand pipeline is now paired with an independently protected supplier database:
+
+- `app/workers.py`: opt-in worker profiles (skills, availability, rates, allowed platform profile URL), short-lived authorization records, match scoring, and local **not-sent** contact drafts.
+- `app/supply_connectors.py`: Freelancer.com official OAuth user-directory preview. Returns blocked/unconnected when the developer token is missing; no screen scraping, private contact details, or auto-messaging.
+- `app/delegation.py`: estimated gross-margin calculation with required client subcontract approval, worker consent, platform conditions, confidential-data sharing, contractual terms, and currency gate. Even when approved, this endpoint never sends or signs.
+- `app/main.py`: token-guarded `/api/workers`, `/api/supply/providers`, `/api/matches/{job_id}`, `/api/workers/discover/freelancer`, `/api/workers/contact-draft`, `/api/delegation/evaluate`; HTML shell at `/workers`. All worker records and operations require the `x-worker-token` header, set from a **private** `WORKER_DB_TOKEN` environment secret. Without a secret, worker endpoints return 401 (fail-closed).
+
+Locally, run `python -m uvicorn app.main:app --host 127.0.0.1 --port 8798` after securely configuring `WORKER_DB_TOKEN`. Then open `http://127.0.0.1:8798/workers`.
+
+**Actual execution evidence:** 22 full-suite tests passed on the connected Windows machine (October 27, 2026; one non-blocking test-client deprecation and a Pydantic warning, the latter since repaired). Matching used invented opt-in test records, so the production database has **zero real suppliers**. This is code implemented and tested, not a deployed public worker portal or proof of successful subcontracting.
+
+Official global/japan talent discovery shortlist: Contra MCP (search, prepare/confirm in-platform outreach), Freelancer.com OAuth directory API, Coconala official MCP *service search only*, Get on Board authorized employer candidate MCP, Wantedly Hire employer-only read-only MCP. CrowdWorks/Lancers have no verified open worker-directory/message API in this review; do not crawl people or route off-platform direct business.
+
+For regulated Japanese freelance outsourcing, see JFTC: https://www.jftc.go.jp/freelancelaw_2026/ (written/electronic terms at engagement and payout deadline).
