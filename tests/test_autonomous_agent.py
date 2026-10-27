@@ -64,3 +64,26 @@ def test_queue_uses_existing_deduplicated_db(tmp_path):
     assert r["source_counts"]["remotive"] == 1
     assert len(r["shortlist"]) == 1
     assert r["queued_for_automatic_submission"] == 0
+
+
+def test_jobicy_jobtype_array_normalizes_before_sqlite(tmp_path):
+    from app.core import JobicyConnector, Settings
+    import httpx
+    payload = {"jobs": [{
+        "id": 44,
+        "jobTitle": "Python workflow automation",
+        "jobGeo": "Anywhere",
+        "jobType": ["Full-Time", "Contract"],
+        "jobDescription": "API integration"
+    }]}
+    async def collect():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, json=payload)
+        )) as client:
+            return await JobicyConnector().collect(client, Settings(max_per_source=10))
+    jobs = asyncio.run(collect())
+    assert jobs[0].contract_type == "Full-Time, Contract"
+    path = tmp_path / "jobicy.db"
+    init_db(path)
+    with connect(path) as conn:
+        assert upsert_job(conn, enrich_job(jobs[0])) is True
