@@ -1,0 +1,134 @@
+"use strict";
+const byId = id => document.getElementById(id);
+const num = v => new Intl.NumberFormat('ja-JP').format(Number(v) || 0);
+const jst = (s, compact = false) => {
+  if (!s) return '未取得';
+  const d = new Date(s);
+  if (!Number.isFinite(d.getTime())) return '未取得';
+  const opts = {timeZone:'Asia/Tokyo', month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'};
+  if (!compact) opts.year = 'numeric';
+  return new Intl.DateTimeFormat('ja-JP', opts).format(d);
+};
+function set(id, value){ const el = byId(id); if(el) el.textContent = String(value); }
+function svg(tag, attrs = {}){
+  const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  Object.keys(attrs).forEach(key => node.setAttribute(key, String(attrs[key])));
+  return node;
+}
+const array = x => Array.isArray(x) ? x : [];
+function renderChart(history){
+  const holder = byId('historyChart');
+  holder.replaceChildren();
+  const values = history.map(p => Math.max(0, Number(p.jobs) || 0));
+  if(!values.length){
+    const empty = svg('text',{x:285,y:112,fill:'#8fa2b7','text-anchor':'middle','font-size':13});
+    empty.textContent = 'まだ実行履歴がありません'; holder.appendChild(empty); return;
+  }
+  const W=570,H=240,top=16,bottom=29,left=9,right=9;
+  const maximum = Math.max(...values,1)*1.15;
+  for(let i=0;i<4;i++){
+    const y=top+(H-top-bottom)*i/3;
+    holder.appendChild(svg('line',{x1:left,x2:W-right,y1:y,y2:y,stroke:'#293950','stroke-dasharray':'4 6','stroke-width':1}));
+  }
+  const points=values.map((v,i)=>({
+    x:left+(W-left-right)*(values.length===1?.5:i/(values.length-1)),
+    y:H-bottom-(H-top-bottom)*v/maximum, value:v
+  }));
+  const line=points.map((p,i)=>(i?'L':'M')+p.x.toFixed(1)+' '+p.y.toFixed(1)).join(' ');
+  const first=points[0],last=points[points.length-1];
+  const area=line+' L'+last.x.toFixed(1)+' '+(H-bottom)+' L'+first.x.toFixed(1)+' '+(H-bottom)+' Z';
+  const defs=svg('defs'),grad=svg('linearGradient',{id:'graphFill',x1:0,y1:0,x2:0,y2:1});
+  grad.appendChild(svg('stop',{offset:'0%','stop-color':'#57d8bb','stop-opacity':'.26'}));
+  grad.appendChild(svg('stop',{offset:'100%','stop-color':'#57d8bb','stop-opacity':'0'}));
+  defs.appendChild(grad);holder.appendChild(defs);
+  holder.appendChild(svg('path',{d:area,fill:'url(#graphFill)'}));
+  holder.appendChild(svg('path',{d:line,fill:'none',stroke:'#69dcc2','stroke-width':3.4,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  points.forEach((p,i)=>{
+    if(i===points.length-1 || points.length<=8){
+      const dot=svg('circle',{cx:p.x,cy:p.y,r:i===points.length-1?5:3,fill:'#6ee8c9',stroke:'#182635','stroke-width':2});
+      const tip=svg('title');
+      tip.textContent=jst(history[i].at)+': '+num(p.value)+'件';
+      dot.appendChild(tip);holder.appendChild(dot);
+    }
+  });
+  set('historyLatest',num(values[values.length-1]));
+  set('historyFrom',jst(history[0].at,true));
+  set('historyTo',jst(history[history.length-1].at,true));
+  set('historyRange',history.length+' 回分');
+}
+function renderSources(sources){
+  const wrap=byId('sourceList');wrap.replaceChildren();
+  const max=Math.max(1,...sources.map(s=>Number(s.fetched)||0));
+  sources.forEach(item=>{
+    const row=document.createElement('div');row.className='source';
+    const name=document.createElement('div');name.className='source-name';name.textContent=item.name||'—';
+    const progress=document.createElement('div');progress.className='source-progress';
+    const fill=document.createElement('div');fill.style.width=Math.max(0,Math.min(100,(Number(item.fetched)||0)*100/max))+'%';
+    progress.appendChild(fill);
+    const count=document.createElement('div');count.className='source-count';count.textContent=num(item.fetched);
+    const state=document.createElement('div');state.className='source-state';
+    if(item.state==='ok')state.textContent='正常';
+    else if(item.state==='error'){state.classList.add('is-error');state.textContent='エラー';state.title=item.error_type||'';}
+    else{state.classList.add('is-off');state.textContent='未接続';}
+    row.append(name,progress,count,state);wrap.appendChild(row);
+  });
+  if(!sources.length){const x=document.createElement('div');x.className='empty';x.textContent='取得元のデータがありません';wrap.appendChild(x);}
+}
+function renderStages(stages){
+  const wrap=byId('stageList');wrap.replaceChildren();
+  stages.forEach(stage=>{
+    const row=document.createElement('div');row.className='stage';
+    const mark=document.createElement('div');mark.className='stage-marker'+(stage.done?' done':'');mark.textContent=stage.done?'✓':'–';
+    const info=document.createElement('div');
+    const title=document.createElement('div');title.className='stage-name';title.textContent=stage.name;
+    const detail=document.createElement('div');detail.className='stage-detail';detail.textContent=stage.detail;
+    info.append(title,detail);
+    const state=document.createElement('div');state.className='stage-state'+(stage.done?' done':'');state.textContent=stage.done?'確認済み':'未達';
+    row.append(mark,info,state);wrap.appendChild(row);
+  });
+  const done=stages.filter(s=>s.done).length,total=stages.length;
+  const pct=total?Math.round(100*done/total):0;
+  set('progressPercent',pct+'%');set('progressCount',done+'/'+total+' 段階');
+  byId('overallBar').style.width=pct+'%';
+}
+function render(data){
+  if(!data || data.schema!==1 || !data.metrics)throw Error('Invalid public status schema');
+  const m=data.metrics,s=array(data.sources),stages=array(data.stages);
+  set('jobsFetched',num(m.jobs_fetched));
+  set('feedsCount',m.sources_ok+'/'+m.sources_total+' 媒体が正常');
+  set('candidates',num(m.candidates));
+  set('mcpFound',num(m.mcp_found));
+  set('mcpIndexed',num(m.mcp_indexed)+'件を候補台帳に収録');
+  set('apifyFound',num(m.apify_found));
+  set('lastRun',jst(data.last_run));
+  set('nextRun',jst(data.next_run_estimate)+'（目安）');
+  set('lastUpdated','公開データ更新 '+jst(data.published_at,true));
+  set('sourceSummary',m.sources_ok+' / '+m.sources_total+' 正常');
+  set('funnelCandidates',num(m.candidates));
+  set('applications',num(m.applications));
+  set('contracts',num(m.contracts));
+  set('outsourced',num(m.outsourced));
+  set('revenue','¥'+num(m.revenue_jpy_verified));
+  const healthy=data.health==='running',degraded=data.health==='degraded';
+  const pill=byId('livePill');
+  pill.className='pill'+(healthy?'':degraded?' pill-warning':' pill-muted');
+  pill.replaceChildren();
+  const dot=document.createElement('span');dot.className='pulse-dot';pill.appendChild(dot);
+  pill.appendChild(document.createTextNode(healthy?' 正常稼働':degraded?' 更新遅延':' 停止・未確認'));
+  set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
+  set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
+  byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
+  renderSources(s);renderStages(stages);renderChart(array(data.history));
+}
+async function refresh(){
+  try{
+    const response=await fetch('/status.json?cache='+Date.now(),{cache:'no-store'});
+    if(!response.ok)throw Error('public status fetch failed');
+    render(await response.json());
+  }catch(error){
+    set('runState','CHECK');set('runtimeHint','公開データが取得できません');
+    const pill=byId('livePill');pill.className='pill pill-muted';pill.textContent='確認できません';
+  }
+}
+refresh();
+window.setInterval(refresh,300000);
