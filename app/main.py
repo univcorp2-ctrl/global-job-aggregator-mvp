@@ -2,6 +2,14 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from html import escape
+import hmac
+import os
+from pathlib import Path
+
+from fastapi import Header
+from pydantic import BaseModel, Field
+from app.workers import connect_workers, register_worker, search_workers, match_workers, prepare_contact, provider_capabilities
+from app.supply_connectors import freelancer_search
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -159,3 +167,164 @@ async def api_collect(force: bool = False) -> dict[str, object]:
 async def collect_from_dashboard():
     await collect_all(settings=settings, force=True)
     return RedirectResponse(url="/", status_code=303)
+
+
+# Worker/supplier information is not public. This router fails closed without
+# WORKER_DB_TOKEN. The public jobs dashboard cannot access personal profiles.
+WORKERS_DB_PATH = Path(os.environ.get("WORKERS_DB_PATH", "data/workers-private.db"))
+
+
+def _require_worker_token(value: str | None) -> None:
+    expected = os.environ.get("WORKER_DB_TOKEN", "")
+    if not expected or not value or not hmac.compare_digest(expected, value):
+        raise HTTPException(status_code=401, detail="Private supply API: credential required")
+
+
+class WorkerRegistration(BaseModel):
+    platform: str
+    external_id: str = Field(min_length=1, max_length=130)
+    display_label: str = Field(min_length=1, max_length=120)
+    skills: list[str] = Field(min_length=1, max_length=30)
+    profile_url: str | None = None
+    location: str | None = None
+    languages: list[str] = Field(default_factory=list)
+    remote_ok: bool = False
+    hourly_rate: float | None = None
+    currency: str | None = None
+    availability: str = "unknown"
+    worker_opted_in: bool = False
+
+
+class ContactDraftRequest(BaseModel):
+    job_id: int = Field(gt=0)
+    worker_id: str
+
+
+@app.get("/api/supply/providers")
+def api_supply_providers(x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    return {"providers": provider_capabilities(), "note": "Capability matrix, not authenticated live sessions."}
+
+
+@app.post("/api/workers")
+def api_register_opted_in_worker(payload: WorkerRegistration,
+                                 x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    if not payload.worker_opted_in:
+        raise HTTPException(status_code=422, detail="Explicit worker consent is required")
+    try:
+        with connect_workers(WORKERS_DB_PATH) as db:
+            worker_id = register_worker(
+                db, platform=payload.platform, external_id=payload.external_id,
+                display_label=payload.display_label, skills=payload.skills,
+                profile_url=payload.profile_url, languages=payload.languages,
+                location=payload.location, remote_ok=payload.remote_ok,
+                hourly_rate=payload.hourly_rate, currency=payload.currency,
+                availability=payload.availability,
+                consent_basis="opt_in", profile_origin="worker_submission",
+            )
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return {"id": worker_id, "registered": True, "contact_authorized": False}
+
+
+@app.get("/api/workers")
+def api_workers(skill: str = "", platform: str = "", limit: int = Query(default=50, ge=1, le=100),
+                x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    with connect_workers(WORKERS_DB_PATH) as db:
+        items = search_workers(db, skill=skill, platform=platform, limit=limit)
+    return {"count": len(items), "workers": items}
+
+
+@app.get("/api/workers/discover/freelancer")
+async def api_discover_freelancer(q: str = "python",
+                                  limit: int = Query(default=10, ge=1, le=10),
+                                  x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    try:
+        return await freelancer_search(query=q, limit=limit)
+    except (ValueError, Exception) as error:
+        if isinstance(error, ValueError):
+            raise HTTPException(status_code=422, detail=str(error)) from error
+        # Never surface provider responses, OAuth secrets or private tokens.
+        raise HTTPException(status_code=502, detail="Provider request failed") from error
+
+
+@app.get("/api/matches/{job_id}")
+def api_match_workers(job_id: int, limit: int = Query(default=10, ge=1, le=50),
+                      x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    with connect(settings.db_path) as jobs_db:
+        job = get_job(jobs_db, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    with connect_workers(WORKERS_DB_PATH) as workers_db:
+        matches = match_workers(workers_db, job, limit=limit)
+    return {"job_id": job_id, "matches": matches,
+            "warning": "Unverified subcontracting rights, platform contact permissions, and payability."}
+
+
+@app.post("/api/workers/contact-draft")
+def api_contact_draft(payload: ContactDraftRequest,
+                      x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    with connect(settings.db_path) as db:
+        job = get_job(db, payload.job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    with connect_workers(WORKERS_DB_PATH) as db:
+        try:
+            draft = prepare_contact(db, job=job, worker_id=payload.worker_id)
+        except ValueError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+    return draft
+
+
+@app.get("/workers", response_class=HTMLResponse)
+def workers_dashboard() -> str:
+    # The page includes no server-rendered private worker records. Token stays
+    # in a transient in-memory input value and is never persisted or transmitted
+    # to an outside host. No contact/send functionality on this page.
+    return layout("Worker supply", """
+    <section class="hero"><div><h1>Worker supply</h1>
+    <p>Private opt-in worker database / skills search. No mass messaging.</p></div>
+    </section>
+    <div class="card"><p>Enter your private API token for this session.</p>
+    <input id="key" type="password" placeholder="WORKER_DB_TOKEN" autocomplete="off">
+    <input id="skill" placeholder="Skill keyword, e.g. python">
+    <button id="load" type="button">View permitted workers</button>
+    <p id="status"></p></div>
+    <div id="list" class="cards"></div>
+    <script>
+    document.getElementById('load').addEventListener('click',async()=>{
+       const key=document.getElementById('key').value;
+       const skill=document.getElementById('skill').value;
+       const out=document.getElementById('list');
+       const status=document.getElementById('status');
+       out.replaceChildren();
+       try {
+         const r=await fetch('/api/workers?skill='+encodeURIComponent(skill),{
+           headers:{'x-worker-token':key},cache:'no-store'
+         });
+         if(!r.ok){status.textContent='Unauthorized or service unavailable ('+r.status+')';return;}
+         const data=await r.json();
+         status.textContent=data.count+' permitted worker profile(s)';
+         for (const item of data.workers){
+           const card=document.createElement('div');card.className='card';
+           const title=document.createElement('strong');
+           title.textContent=item.display_label+' / '+item.platform;
+           const info=document.createElement('p');
+           info.textContent=item.skills.join(', ')+' | '+(item.location||'location unknown');
+           card.append(title,info);
+           if (item.profile_url) {
+             const a=document.createElement('a');a.href=item.profile_url;a.rel='noopener noreferrer';
+             a.target='_blank';a.textContent='Original platform profile';
+             card.append(a);
+           }
+           out.append(card);
+         }
+       }catch(error){status.textContent='Connection failed';}
+    });
+    </script>
+    """)
