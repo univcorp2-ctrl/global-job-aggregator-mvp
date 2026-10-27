@@ -12,6 +12,7 @@ from app.workers import connect_workers, register_worker, search_workers, match_
 from app.supply_connectors import freelancer_search
 from app.delegation import DelegationInput, evaluate_delegation
 from app.market import compare_opportunities, scenario_roi
+from app.application_queue import connect_queue, add_candidate, list_queue, plan_submission, classify_delivery
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -174,6 +175,7 @@ async def collect_from_dashboard():
 # Worker/supplier information is not public. This router fails closed without
 # WORKER_DB_TOKEN. The public jobs dashboard cannot access personal profiles.
 WORKERS_DB_PATH = Path(os.environ.get("WORKERS_DB_PATH", "data/workers-private.db"))
+APPLICATIONS_DB_PATH = Path(os.environ.get("APPLICATIONS_DB_PATH", "data/applications-private.db"))
 
 
 def _require_worker_token(value: str | None) -> None:
@@ -413,3 +415,90 @@ def api_market_scenario(payload: MarketScenario,
                         x_worker_token: str | None=Header(default=None)):
     _require_worker_token(x_worker_token)
     return scenario_roi(**payload.model_dump())
+
+
+# The applications queue is owner-only. Application drafts may be prepared,
+# but there is deliberately no submit/dispatch endpoint.
+class ApplicationIntake(BaseModel):
+    platform: str = "upwork"
+    external_job_id: str = Field(min_length=1,max_length=120)
+    title: str = Field(min_length=1,max_length=200)
+    job_url: str
+    budget_amount: float = Field(ge=0)
+    currency: str = "USD"
+    application_credits: int = Field(default=0,ge=0,le=500)
+    expected_ai_tasks: list[str] = Field(min_length=1,max_length=20)
+    specialist_tasks: list[str] = Field(default_factory=list)
+    subcontract_permission: str = "unknown"
+    draft_text: str = Field(default="",max_length=5000)
+
+
+@app.post("/api/applications/queue")
+def application_intake(payload: ApplicationIntake,
+                       x_worker_token: str | None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    try:
+        with connect_queue(APPLICATIONS_DB_PATH) as db:
+            return add_candidate(db,**payload.model_dump())
+    except ValueError as e:
+        raise HTTPException(status_code=422,detail=str(e)) from e
+
+
+@app.get("/api/applications/queue")
+def application_list(limit:int=Query(default=30,ge=1,le=100),
+                     x_worker_token: str | None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    with connect_queue(APPLICATIONS_DB_PATH) as db:
+        candidates=list_queue(db,limit=limit)
+    return {"count":len(candidates),"applications":candidates,"sent_total":sum(x["is_submitted"] for x in candidates)}
+
+
+@app.get("/api/applications/{application_id}/readiness")
+def application_readiness(application_id:str,remaining_credits:int=Query(ge=0),
+                          x_worker_token: str | None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    try:
+        with connect_queue(APPLICATIONS_DB_PATH) as db:
+            return plan_submission(db,application_id,remaining_credits=remaining_credits)
+    except ValueError as e:
+        raise HTTPException(status_code=404,detail=str(e)) from e
+
+
+class DeliveryRoutingRequest(BaseModel):
+    specialist_tasks: list[str] = Field(default_factory=list,max_length=30)
+    subcontract_allowed: bool=False
+    has_specialist_consent: bool=False
+    has_customer_data_permission: bool=False
+
+
+@app.post("/api/applications/delivery-route")
+def application_delivery_route(payload:DeliveryRoutingRequest,
+                               x_worker_token:str|None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    return classify_delivery(**payload.model_dump())
+
+
+@app.get("/applications",response_class=HTMLResponse)
+def applications_ui():
+    return layout("AI-first applications",
+      "<section class='hero'><div><h1>AI-first application queue</h1>"
+      "<p>Small fixed-scope jobs / private readiness tracker. Draft is not sent.</p>"
+      "</div></section>"
+      "<div class='card'><p>WORKER_DB_TOKEN (kept only in this page's memory)</p>"
+      "<input id='application-token' type='password' autocomplete='off'>"
+      "<button id='application-fetch' type='button'>Load application queue</button>"
+      "<p id='application-status'></p><div id='application-results'></div></div>"
+      "<script>"
+      "document.getElementById('application-fetch').onclick=async()=>{"
+      "const panel=document.getElementById('application-results');panel.replaceChildren();"
+      "const status=document.getElementById('application-status');"
+      "try{const r=await fetch('/api/applications/queue',{headers:{"
+      "'x-worker-token':document.getElementById('application-token').value},cache:'no-store'});"
+      "if(!r.ok){status.textContent='Access denied or API unavailable';return;}"
+      "const d=await r.json();status.textContent=d.count+' draft candidates / '+d.sent_total+' verified submissions';"
+      "for(const x of d.applications){const section=document.createElement('div');"
+      "const title=document.createElement('strong');title.textContent=x.title+' — '+x.status;"
+      "const detail=document.createElement('p');detail.textContent=x.budget_amount+' '+x.currency+' / '+x.application_credits+' credits';"
+      "section.append(title,detail);panel.append(section);}"
+      "}catch(e){status.textContent='Connection failure';}};"
+      "</script>");
