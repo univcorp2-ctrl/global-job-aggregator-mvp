@@ -10,6 +10,7 @@ from fastapi import Header
 from pydantic import BaseModel, Field
 from app.workers import connect_workers, register_worker, search_workers, match_workers, prepare_contact, provider_capabilities
 from app.supply_connectors import freelancer_search
+from app.delegation import DelegationInput, evaluate_delegation
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -328,3 +329,25 @@ def workers_dashboard() -> str:
     });
     </script>
     """)
+
+
+class DelegationPlan(BaseModel):
+    customer_price: float = Field(ge=0)
+    supplier_quote: float = Field(ge=0)
+    platform_fees: float = Field(default=0, ge=0)
+    qa_reserve: float = Field(default=0, ge=0)
+    fx_buffer: float = Field(default=0, ge=0)
+    subcontract_approved_by_client: bool = False
+    worker_agreed: bool = False
+    platform_terms_verified: bool = False
+    data_sharing_approved: bool = False
+    written_terms_ready: bool = False
+    client_currency: str = Field(default="JPY", min_length=3, max_length=3)
+    worker_currency: str = Field(default="JPY", min_length=3, max_length=3)
+
+
+@app.post("/api/delegation/evaluate")
+def api_evaluate_delegation(payload: DelegationPlan,
+                            x_worker_token: str | None = Header(default=None)):
+    _require_worker_token(x_worker_token)
+    return evaluate_delegation(DelegationInput(**payload.dict()))
