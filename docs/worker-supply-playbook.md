@@ -64,8 +64,29 @@ Set header `x-worker-token: <secret>` on API calls. UI page contains no embedded
 
 ## Validation and next action
 
-1. Twelve offline tests (existing public-connector tests + worker tests) passed on the user's Windows machine after resolving SQLite handles not closing. 1 non-blocking FastAPI/httpx version deprecation warning.
+1. 22 offline tests (full suite: public connector tests + worker privacy/matching + delegation economics) passed on the user's Windows machine after resolving SQLite handles not closing. 1 non-blocking FastAPI/httpx version deprecation warning.
 2. Live OAuth worker search on Freelancer **not yet executed**; provider token/permission remains blocked. Search preview is tested with an HTTP mock and output fields scrubbed.
 3. No real worker profiles imported at 2026-10-27. Database is intentionally empty, not populated with fictional workers.
 4. Cross-platform delegation is a **policy-gated hypothesis**, not a proven way to resell every job. For each proposed match verify: original client's explicit subcontract permission, worker consent, client data disclosure approval, confidentiality, scope, payment/fees, and no direct-deal circumvention.
 5. Next: finish Contra employer onboarding/OAuth and ask for first-party allowed talent search; obtain Freelancer OAuth2 portal permission; query Japanese Coconala via official first-party MCP UI, not cloned profile scraping; onboard 3 consenting workers; obtain 1 real fixed-scope job that expressly allows subcontractors. Only after human review send **one** platform-native invite and verify receipt (not in the current implementation).
+
+## 2026-10-27 Japanese delegated-work compliance checkpoint
+
+Per the Japan Fair Trade Commission's 2026 guidance:
+- When commissioning a covered freelancer, the hiring business must **promptly provide the transaction terms in writing or electronically**, including parties, deliverables, delivery/performance date/place, amount and payment due date. Oral instruction alone is not enough.
+- Generally the specified payment deadline must be set within 60 days of deliverable receipt, as short as feasible. There is a narrowly conditioned re-subcontracting timing exception; do not assume it without verifying the original contract, disclosure and the exact statutory prerequisites.
+- This application's delegation gate `written_worker_terms_ready` is an explicit prerequisite, not legal document generation or a claim of regulatory compliance.
+
+JFTC official sources: https://www.jftc.go.jp/freelancelaw_2026/ and https://www.jftc.go.jp/freelancelaw_2026/index.html.
+
+### Feasibility calculator
+
+`POST /api/delegation/evaluate` accepts `customer_price`, `supplier_quote`, `platform_fees`, `qa_reserve`, `fx_buffer`, matching currencies and five explicit permissions. A 100,000 JPY theoretical job with a 55,000 JPY worker quote, 9,000 JPY platform fees, 6,000 JPY QA and 2,000 JPY currency reserve yields 28,000 JPY / 28% **pre-tax estimated gross margin**, but the API says BLOCKED unless all permissions pass. Never mix currencies without explicit rates. Even a pass indicates review readiness only: no actual work orders, contact sends, financial transfers, or contracts.
+
+Current test results as of 2026-10-27: **22 passed, 2 warnings** (one Starlette/httpx deprecation and an already-fixed Pydantic dict() warning in the prior test run; rerun pending). The earlier SQLite Windows file-lock defect was discovered in the first test run and repaired in commit `9bb3f296f23067b778a2b8108b2ab287048dca5a`.
+
+### User-managed spreadsheet views
+
+[Worker/provider capabilities](https://docs.google.com/spreadsheets/d/1ULCcjgjeM0nWV8Wf9SUlMEDf6Dq0ogmMiCv966F0BIo/edit#gid=8872200),
+[Worker registry — zero real profiles, awaiting opt-in/OAuth](https://docs.google.com/spreadsheets/d/1ULCcjgjeM0nWV8Wf9SUlMEDf6Dq0ogmMiCv966F0BIo/edit#gid=8872201),
+[Cross-platform matching synthetic test](https://docs.google.com/spreadsheets/d/1ULCcjgjeM0nWV8Wf9SUlMEDf6Dq0ogmMiCv966F0BIo/edit#gid=8872202).
