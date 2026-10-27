@@ -515,7 +515,7 @@ class HimalayasConnector(Connector):
 
     async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
         jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords[:3]:
+        for keyword in ("automation", "AI", "python"):
             data = await request_json(
                 client,
                 self.endpoint,
@@ -551,11 +551,11 @@ class JobicyConnector(Connector):
 
     async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
         jobs: list[NormalizedJob] = []
-        for keyword in settings.keywords[:3]:
+        for keyword in ("all",):
             data = await request_json(
                 client,
                 self.endpoint,
-                params={"count": min(settings.max_per_source, 50), "tag": keyword},
+                params={"count": min(settings.max_per_source, 50)},
                 headers=default_headers(settings),
             )
             for item in data.get("jobs", []):
@@ -600,7 +600,7 @@ class ArbeitnowConnector(Connector):
             title = item.get("title") or "Untitled"
             description = strip_html(item.get("description"))
             searchable = f"{title} {description} {' '.join(tags)}".lower()
-            if not any(keyword.lower() in searchable for keyword in settings.keywords):
+            if not any(keyword in searchable for keyword in ("ai", "python", "automation", "api", "data", "machine learning", "workflow", "n8n")):
                 continue
             jobs.append(
                 NormalizedJob(
