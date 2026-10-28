@@ -13,6 +13,7 @@ from app.supply_connectors import freelancer_search
 from app.delegation import DelegationInput, evaluate_delegation
 from app.market import compare_opportunities, scenario_roi
 from app.application_queue import connect_queue, add_candidate, list_queue, plan_submission, classify_delivery
+from app.subcontracting import SpecialistScenario, subcontract_backup_plan, indicative_categories
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
@@ -502,3 +503,36 @@ def applications_ui():
       "section.append(title,detail);panel.append(section);}"
       "}catch(e){status.textContent='Connection failure';}};"
       "</script>");
+
+
+class SpecialistQuoteScenario(BaseModel):
+    task_category: str
+    estimated_hours: float=Field(ge=0)
+    indicated_hourly_rate_usd: float=Field(ge=0)
+    customer_budget_usd: float=Field(ge=0)
+    platform_fee_usd: float=Field(default=0,ge=0)
+    qa_reserve_usd: float=Field(default=0,ge=0)
+    other_costs_usd: float=Field(default=0,ge=0)
+    original_client_subcontract_approved: bool=False
+    original_platform_allows_subcontract: bool=False
+    worker_accepted_terms: bool=False
+    confidentiality_approved: bool=False
+    worker_quote_verified: bool=False
+    required_outcome_measurable: bool=False
+
+
+@app.get("/api/applications/specialist-capabilities")
+def application_specialist_capabilities(x_worker_token: str|None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    return {"capabilities":indicative_categories(),
+            "note":"Public profile display rates; not actual quotes or permission to solicit"}
+
+
+@app.post("/api/applications/subcontract-plan")
+def application_subcontract_plan(payload:SpecialistQuoteScenario,
+                                 x_worker_token:str|None=Header(default=None)):
+    _require_worker_token(x_worker_token)
+    try:
+        return subcontract_backup_plan(SpecialistScenario(**payload.model_dump()))
+    except ValueError as e:
+        raise HTTPException(status_code=422,detail=str(e)) from e
