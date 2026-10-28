@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 os.chdir(ROOT)
 from app.autonomous_agent import run_once  # noqa: E402
+from app.auto_application_queue import prepare  # noqa: E402
 
 @contextmanager
 def single_instance(directory: Path):
@@ -77,6 +78,10 @@ def main():
             os.environ["HTTP_TIMEOUT_SECONDS"] = os.environ.get("HTTP_TIMEOUT_SECONDS", "10")
             report = asyncio.run(run_once(out / "jobs.db", perform_collection=True,
                                           feedback_path=out / "feedback.json"))
+            # Prepare an idempotent, private queue before anything touches a provider.
+            # This stage creates ONLY candidates. No provider has a verified write adapter.
+            application_queue = prepare(out / "jobs.db", out / "application-intents.db")
+            assert application_queue["external_submissions"] == 0
             # Never write OAuth tokens, private worker lists or personal account data to the report.
             assert sum(report["external_calls"].values()) == 0
             atomic_json(out / f"scan-{stamp}.json", report)
@@ -88,7 +93,9 @@ def main():
                 "shortlist": len(report["jobs"]["shortlist"]),
                 "mcp_discovered": len(report["mcp_catalog"]["candidates"]),
                 "apify_discovered": len(report["apify_catalog"]["candidates"]),
-                "writes": 0})
+                "writes": 0,
+                "application_prequalified": sum(application_queue["status_counts"].values()),
+                "real_application_count": application_queue["external_submissions"]})
         except Exception as exc:
             # Do not dump remote API tokens/response bodies in errors.
             atomic_json(out / "status.json", {
