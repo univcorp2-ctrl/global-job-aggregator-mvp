@@ -153,3 +153,43 @@ def classify_delivery(*, specialist_tasks:list[str], subcontract_allowed:bool,
         "next":("Owner reviews specialist quote and platform-native invite; no automatic order"
                 if allow else "Get written client permission, specialist consent and data sharing rights"),
     }
+
+
+def assess_job_constraints(description: str, *, ai_first: bool = True) -> dict:
+    """Conservative screening of explicit client instructions.
+
+    This catches clear English phrases only. A PASS is never proof that AI
+    or subcontracting is allowed; absent explicit permission stays UNKNOWN.
+    """
+    import re
+    text = " ".join(description.lower().split())
+    ai_exclusions = [
+      r"without (?:the use of )?(?:generative )?ai",
+      r"do not use (?:generative )?ai",
+      r"no (?:generative )?ai (?:tools|content|writing|allowed)",
+      r"(?:final|all) (?:wording|documentation|text) must be written .*?without (?:generative )?ai",
+      r"(?:human[- ]written|100% human[- ]written)",
+      r"no chatgpt",
+    ]
+    outsource_exclusions = [
+      r"no subcontract(?:ors|ing)?",
+      r"subcontracting (?:is |strictly )?(?:prohibited|not allowed)",
+      r"no (?:agencies|third[- ]party contractors)",
+      r"work must be performed by (?:you|the applicant) personally",
+    ]
+    flags = {
+        "explicit_no_ai": any(re.search(q, text) for q in ai_exclusions),
+        "explicit_no_subcontract": any(re.search(q, text) for q in outsource_exclusions),
+    }
+    if flags["explicit_no_ai"] and ai_first:
+        stage = "reject_ai_first"
+    else:
+        stage = "manual_scope_and_platform_review"
+    return {
+        "screening_state": stage,
+        "flags": flags,
+        "ai_use_rights": "prohibited" if flags["explicit_no_ai"] else "not_established",
+        "subcontract_rights": "prohibited" if flags["explicit_no_subcontract"] else "not_established",
+        "auto_send_enabled": False,
+        "warning": "Keyword filter only; read full job terms and client instructions before proposing.",
+    }
