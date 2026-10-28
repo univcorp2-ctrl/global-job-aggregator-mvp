@@ -109,3 +109,29 @@ def test_one_candidate_api_flow_no_send(monkeypatch,tmp_path):
         route=cli.post("/api/applications/delivery-route",
                        json={"specialist_tasks":["design"],"subcontract_allowed":False},headers=headers)
         assert route.json()["may_outsource"] is False
+
+
+def test_ai_first_jobs_rejected_when_client_explicitly_prohibits_ai():
+    from app.application_queue import assess_job_constraints
+    original = ("The final wording must be written by you, without generative AI. "
+                "Documentation must reflect actual workbook behavior.")
+    outcome=assess_job_constraints(original)
+    assert outcome["screening_state"]=="reject_ai_first"
+    assert outcome["flags"]["explicit_no_ai"] is True
+    assert outcome["auto_send_enabled"] is False
+
+
+def test_subcontracting_never_assumed_from_silence():
+    from app.application_queue import assess_job_constraints
+    outcome=assess_job_constraints("Make a dynamic Excel round robin schedule for 8 to 48 players.")
+    assert outcome["screening_state"]=="manual_scope_and_platform_review"
+    assert outcome["subcontract_rights"]=="not_established"
+    assert outcome["ai_use_rights"]=="not_established"
+
+
+def test_explicit_subcontract_ban_holds_outsourcing():
+    from app.application_queue import assess_job_constraints
+    outcome=assess_job_constraints("No agencies or third-party contractors. You must personally deliver.")
+    assert outcome["flags"]["explicit_no_subcontract"] is True
+    assert outcome["subcontract_rights"]=="prohibited"
+    assert outcome["auto_send_enabled"] is False
