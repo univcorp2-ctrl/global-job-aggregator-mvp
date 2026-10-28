@@ -121,6 +121,18 @@ def build_public_payload(root: Path) -> dict:
     status = _load(root / "status.json")
     sources = _sources(report)
     upwork = _upwork_verification(root)
+    campaign = _load(root / "application-campaign-status.json")
+    queue_counts = campaign.get("queue_total_by_status") or {}
+    if not isinstance(queue_counts, dict):
+        queue_counts = {}
+    goal = 100  # The count of verified provider submissions, never drafts.
+    candidate_queue = sum(
+        _number(queue_counts.get(status), 100000)
+        for status in ("qualification_pending","draft_ready",
+                       "provider_authorization_required",
+                       "provider_confirmation_required")
+    )
+    campaign_at = _safe_iso(campaign.get("run_at"))
     scanned = sum(row["fetched"] for row in sources)
     ok = sum(row["state"] == "ok" for row in sources)
     candidates = report.get("jobs", {}).get("shortlist") or []
@@ -166,6 +178,18 @@ def build_public_payload(root: Path) -> dict:
                     "applications": upwork["submitted"], "contracts": 0, "outsourced": 0,
                     "revenue_jpy_verified": 0},
         "sources": sources, "upwork": upwork,
+        "application_goal": {
+            "target": goal,
+            "verified_submitted": upwork["submitted"] if upwork["verification"] == "recent" else None,
+            "candidate_queue": candidate_queue,
+            "campaign_checked_at": campaign_at,
+            "campaign_source": "Freelancer.com official public API" if campaign_at else "not_checked",
+            "marketplace_rows_screened": _number(campaign.get("marketplace_leads_scanned")),
+            "campaign_api_errors": _number(campaign.get("api_errors")),
+            "provider_bids_sent": 0,
+            "limits": "No native write-scope auth; account verification and per-proposal review required",
+            "note": "Queue items and draft proposals are not submitted applications.",
+        },
         "stages": stages, "history": _run_series(root),
         "operation": {
             "collection_interval_hours": 6,
