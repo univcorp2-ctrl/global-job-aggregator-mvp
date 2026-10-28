@@ -57,7 +57,7 @@ def publishable_jobs(db_path, limit=120):
         if not valid_link(url,host): continue
         if url in seen: continue
         seen.add(url)
-        assessment=triage(row)
+        assessment=triage(dict(row))
         results.append({
             "title":clean(row["title"],130),
             "company":clean(row["company"],70),
