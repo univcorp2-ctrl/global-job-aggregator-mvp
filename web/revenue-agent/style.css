@@ -13,3 +13,14 @@
 .upwork-detail strong{display:block;font-size:19px;margin-top:8px;overflow-wrap:anywhere}
 @media(max-width:950px){.upwork-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:600px){.upwork-grid{gap:8px}.upwork-detail{padding:11px}.upwork-detail strong{font-size:16px}}
+
+.goal-panel{margin:0 0 16px}
+.goal-panel .panel-header{margin-bottom:14px}
+.goal-big{font-size:25px;font-variant-numeric:tabular-nums}
+.goal-panel .overall-progress{height:9px;margin-bottom:17px}
+.goal-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.goal-summary>div{padding:12px;border:1px solid var(--line);border-radius:9px;background:#182438}
+.goal-summary small{display:block;font-size:10px;color:var(--muted)}
+.goal-summary strong{display:block;font-size:20px;margin-top:7px}
+.goal-summary .goal-timestamp{font-size:12px}
+@media(max-width:600px){.goal-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.goal-summary>div:last-child{grid-column:1/-1}.goal-big{font-size:21px}}
