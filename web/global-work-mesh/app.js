@@ -115,7 +115,7 @@ function render(){
    tr.appendChild(linkTd);tbody.appendChild(tr);
  }
 
- if(!items.length){list.appendChild(el("div","empty","条件に一致する公開求人がありません。検索条件を変更してください。"));e("showMore").hidden=true;return}
+ if(!items.length){list.appendChild(el("div","empty","条件に一致する公開求人がありません。検索条件を変更してください。"));const row=el("tr");const cell=el("td","empty","この条件に一致する求人はありません。媒体や検索条件を変更してください。");cell.colSpan=6;row.appendChild(cell);tbody.appendChild(row);e("showMore").hidden=true;return}
  for(const j of items.slice(0,visible)){
    const box=el("article","job");
    const top=el("div","job-head");
