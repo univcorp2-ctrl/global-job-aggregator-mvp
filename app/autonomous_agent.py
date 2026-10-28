@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.core import Settings, collect_all, connect, init_db, list_jobs
+from app.revenue_policy import triage, subcontract_gate
 
 MCP_REGISTRY = "https://registry.modelcontextprotocol.io/v0.1/servers"
 APIFY_STORE = "https://api.apify.com/v2/store"
@@ -179,8 +180,9 @@ def _feedback_multiplier(row: dict[str, Any], feedback: dict[str, Any]) -> float
 def score_candidate(row: dict[str, Any], feedback: dict[str, Any] | None = None
                     ) -> dict[str, Any]:
     feedback = feedback or {}
-    employment = _is_employment(row)
-    project = _is_probable_project(row)
+    assessment = triage(row)
+    employment = _is_employment(row) or not assessment["project_qualified"]
+    project = assessment["project_qualified"]
     ai = max(0., min(100., float(row.get("ai_relevance") or 0)))
     fit = max(0., min(100., float(row.get("fit_score") or 0)))
     has_url = bool(_safe_url(row.get("url")))
@@ -200,6 +202,10 @@ def score_candidate(row: dict[str, Any], feedback: dict[str, Any] | None = None
         "title": _short(row.get("title"), 180),
         "url": _safe_url(row.get("url")),
         "score": score, "opportunity_type": label,
+        "ai_delivery_mode": assessment["delivery_mode"],
+        "ai_only_candidate": assessment["ai_only_candidate"],
+        "fulfillment_verified": False,
+        "worker_search": "disabled_before_awarded_contract",
         "compensation_as_advertised": _short(row.get("compensation"), 100) or None,
         "is_confirmed_contract": False,
         "expected_net_profit": None,  # Never invent outsourcing costs.
@@ -227,7 +233,7 @@ def evaluate_database(path: Path, feedback: dict[str, Any],
     scored = [score_candidate(r, feedback) for r in raw]
     shortlist = sorted(
         (x for x in scored if x["opportunity_type"] == "possible_paid_project_unverified"
-         and x["url"]), key=lambda x: x["score"], reverse=True
+         and x["ai_only_candidate"] and x["url"]), key=lambda x: x["score"], reverse=True
     )[:MAX_DRAFTS]
     return {"fetched_rows_evaluated": len(raw), "source_counts": counts,
             "possible_project_candidates": len([x for x in scored if
