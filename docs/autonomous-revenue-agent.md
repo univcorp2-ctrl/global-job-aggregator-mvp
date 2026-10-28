@@ -39,3 +39,7 @@ pytest -q tests/test_autonomous_agent.py
 - [ ] Native provider bid draft/confirm and immutable accounting reconcile with real money.
 - [ ] Durable private state plus alerting configured.
 - [x] Metadata discovery, score preparation and human-approval-only outbound design in code.
+
+## 2026-10-28: Official Freelancer.com public client projects (live)
+
+GET https://www.freelancer.com/api/projects/0.1/projects/active/?query=Excel%20VBA&limit=10 returned HTTP 200 without OAuth in direct PC network validation. `app/core.py` now includes `FreelancerPublicConnector` in the **active default collector** (not just the old, unused token-based app/connectors/freelancer.py). It requests three search terms, filters title/tags, checks `status=active`, captures official canonical project URL, pay type/currency/budget and real bid_count into source-specific, de-duplicated records. `app/autonomous_agent.py` discounts high competition using observed bids; it does not claim a contract, eligibility, verified budget, net profit or consent to bid. No authenticated API, phone/email scraping or automatic bids are used. Project/client due diligence and platform-native bid approval remain pending.
