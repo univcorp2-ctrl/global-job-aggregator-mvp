@@ -54,14 +54,7 @@ function startAiApplication(rows){
  const target="https://chatgpt.com/?q="+encodeURIComponent(prompt);
  status.textContent="AI応募ワークフローを開始します。送信済みではありません。提供元の正式な受付結果を確認してください。";
  // Only a direct user click can open a new window; no invisible background submissions.
- const child=window.open(target,"_blank","noopener,noreferrer");
- if(!child){
-   status.textContent="ブラウザのポップアップ制限を確認してください。AI応募処理の画面を開けませんでした。";
-   const link=document.createElement("a"); link.href=target;link.target="_blank";
-   link.rel="noopener noreferrer";link.textContent="AI応募ワークフローを開く";
-   status.appendChild(document.createTextNode(" "));
-   status.appendChild(link);
- }
+ window.location.assign(target);
 }
 
 function render(){
