@@ -91,6 +91,21 @@ function renderStages(stages){
   set('progressPercent',pct+'%');set('progressCount',done+'/'+total+' 段階');
   byId('overallBar').style.width=pct+'%';
 }
+function renderUpwork(u){
+  const recent = u && u.verification==='recent';
+  set('upworkVerified',u?.verified_at ? '公式最終確認 '+jst(u.verified_at) : '公式照合未完了');
+  set('upworkSubmitted',recent && Number.isInteger(u.submitted) ? num(u.submitted)+'件' : '再確認が必要');
+  let state='未確認';
+  if(recent && u.target==='not_submitted')state='未応募';
+  if(recent && u.target==='submitted')state='応募済み';
+  if(recent && u.target==='closed')state='募集終了';
+  set('upworkCandidateStatus',state);
+  set('upworkConnects',recent && Number.isInteger(u.target_connects_cost) && Number.isInteger(u.connects_balance)
+    ? num(u.target_connects_cost)+' / '+num(u.connects_balance)
+    : '再確認が必要');
+  set('upworkInFlight',recent && Number.isInteger(u.pending) && Number.isInteger(u.invitations)
+    ? num(u.pending)+'件 / '+num(u.invitations)+'件' : '再確認が必要');
+}
 function render(data){
   if(!data || data.schema!==1 || !data.metrics)throw Error('Invalid public status schema');
   const m=data.metrics,s=array(data.sources),stages=array(data.stages);
@@ -105,7 +120,7 @@ function render(data){
   set('lastUpdated','公開データ更新 '+jst(data.published_at,true));
   set('sourceSummary',m.sources_ok+' / '+m.sources_total+' 正常');
   set('funnelCandidates',num(m.candidates));
-  set('applications',num(m.applications));
+  set('applications',m.applications == null ? '未確認' : num(m.applications));
   set('contracts',num(m.contracts));
   set('outsourced',num(m.outsourced));
   set('revenue','¥'+num(m.revenue_jpy_verified));
@@ -118,7 +133,7 @@ function render(data){
   set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
   set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
   byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
-  renderSources(s);renderStages(stages);renderChart(array(data.history));
+  renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
 }
 async function refresh(){
   try{

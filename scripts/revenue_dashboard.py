@@ -18,10 +18,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SITE_SOURCE = ROOT / "web" / "revenue-agent"
 PROJECT = "revenue-agent-ops"
-SOURCES = ("himalayas", "jobicy", "arbeitnow", "remotive", "remoshift")
+SOURCES = ("himalayas", "jobicy", "arbeitnow", "remotive", "remoshift", "freelancer_public")
 SOURCE_NAMES = {"himalayas": "Himalayas", "jobicy": "Jobicy",
                 "arbeitnow": "Arbeitnow", "remotive": "Remotive",
-                "remoshift": "Remoshift"}
+                "remoshift": "Remoshift", "freelancer_public": "Freelancer.com"}
 MAX_HISTORY = 18
 PUBLIC_FILES = ("index.html", "app.js", "style.css", "_headers")
 
@@ -49,6 +49,36 @@ def _load(path: Path) -> dict:
         return data if isinstance(data, dict) else {}
     except (ValueError, OSError):
         return {}
+
+def _upwork_verification(root: Path) -> dict:
+    """Strictly public-safe, time-bounded summary of a separately verified API read.
+
+    Never derive a submission from a draft, browser click, or Connects balance.
+    In the absence of a fresh official-MCP readback, show *unverified*, not 0.
+    """
+    raw = _load(root / "upwork-application-verification.json")
+    stamp = _safe_iso(raw.get("verified_at"))
+    if raw.get("provider") != "upwork_official_mcp" or not stamp:
+        return {"verification": "unverified", "verified_at": None,
+                "submitted": None, "pending": None, "invitations": None,
+                "connects_balance": None, "target": "unverified",
+                "target_connects_cost": None, "target_open": None}
+    age = (datetime.now(timezone.utc) -
+           datetime.fromisoformat(stamp)).total_seconds()
+    current = 0 <= age < 24 * 3600
+    status = raw.get("target_status")
+    target = status if status in {"not_submitted", "submitted", "closed"} else "unverified"
+    # Values are snapshot counters, not live streaming updates. Do not make fake claims.
+    return {"verification": "recent" if current else "stale", "verified_at": stamp,
+            "submitted": _number(raw.get("submitted"), 100000) if current else None,
+            "pending": _number(raw.get("pending"), 100000) if current else None,
+            "invitations": _number(raw.get("invitations"), 100000) if current else None,
+            "connects_balance": _number(raw.get("connects_balance"), 100000) if current else None,
+            "target": target,
+            "target_connects_cost": _number(raw.get("target_connects_cost"), 1000)
+                                   if current else None,
+            "target_open": bool(raw.get("target_open")) if current else None}
+
 
 def _sources(report: dict) -> list[dict]:
     by_name = {str(r.get("source")): r for r in report.get("collect", {}).get("results", [])
@@ -90,6 +120,7 @@ def build_public_payload(root: Path) -> dict:
     report = _load(root / "latest.json")
     status = _load(root / "status.json")
     sources = _sources(report)
+    upwork = _upwork_verification(root)
     scanned = sum(row["fetched"] for row in sources)
     ok = sum(row["state"] == "ok" for row in sources)
     candidates = report.get("jobs", {}).get("shortlist") or []
@@ -103,7 +134,7 @@ def build_public_payload(root: Path) -> dict:
     state = "running" if healthy else ("degraded" if degraded else "offline")
     stages = [
         {"id": "api", "name": "公式データの取得", "done": ok >= 4,
-         "detail": f"{ok}/5 媒体の取得が成功"},
+         "detail": f"{ok}/{len(SOURCES)} 媒体の取得が成功"},
         {"id": "schedule", "name": "PCバックグラウンド運転", "done": healthy,
          "detail": "6時間間隔の自律収集（PC稼働が前提）"},
         {"id": "qualify", "name": "案件の採点・候補化", "done": isinstance(candidates, list) and
@@ -112,8 +143,10 @@ def build_public_payload(root: Path) -> dict:
         {"id": "mcp", "name": "新規MCP・APIの探索", "done": mcp.get("status", {}).get("state") ==
          "read_only_success" and apify.get("status", {}).get("state") == "read_only_success",
          "detail": "自動発見のみ、権限の自動付与なし"},
-        {"id": "apply", "name": "許諾済み案件への応募", "done": False,
-         "detail": "提案確定時は公式プラットフォームの承認が必要"},
+        {"id": "apply", "name": "許諾済み案件への応募",
+         "done": upwork["verification"] == "recent" and
+                 bool(upwork["submitted"] and upwork["submitted"] > 0),
+         "detail": "公式MCPの提出済記録を反映（未確認時は未達扱い）"},
         {"id": "contract", "name": "受注・外注手配", "done": False,
          "detail": "正式契約・再委託同意が未達"},
         {"id": "payment", "name": "検収・初回入金", "done": False,
@@ -130,9 +163,10 @@ def build_public_payload(root: Path) -> dict:
                     "mcp_found": _number(mcp.get("status", {}).get("count")),
                     "mcp_indexed": min(len(mcp.get("candidates", [])), 60),
                     "apify_found": _number(apify.get("status", {}).get("count")),
-                    "applications": 0, "contracts": 0, "outsourced": 0,
+                    "applications": upwork["submitted"], "contracts": 0, "outsourced": 0,
                     "revenue_jpy_verified": 0},
-        "sources": sources, "stages": stages, "history": _run_series(root),
+        "sources": sources, "upwork": upwork,
+        "stages": stages, "history": _run_series(root),
         "operation": {
             "collection_interval_hours": 6,
             "public_report_only": True,
