@@ -78,12 +78,26 @@ def export(db_path, dest):
     dest.mkdir(parents=True,exist_ok=True)
     for name in FILES: shutil.copyfile(ASSETS/name,dest/name)
     jobs=publishable_jobs(db_path)
+    # Public aggregate only: private application intent details stay in Drive.
+    status_path=Path(db_path).parent/"status.json"
+    private_status={}
+    if status_path.is_file():
+        try:
+            private_status=json.loads(status_path.read_text(encoding="utf8"))
+        except (OSError,ValueError):
+            private_status={}
+    # A successful queue preparation is NOT a provider-native submission.
+    prequalified=max(0,min(100000,int(private_status.get("application_prequalified") or 0)))
+    submitted=max(0,min(100000,int(private_status.get("real_application_count") or 0)))
     payload={
        "schema":1, "updated_at":datetime.now(timezone.utc).isoformat(),
        "listing_count":len(jobs),
        "sources":["Himalayas","Jobicy"],
        "rights":"Attribution-required, source-native apply links only; do not redistribute as API",
        "jobs":jobs,
+       "auto_apply":{"prequalified":prequalified,"submitted":submitted,
+         "mode":"authenticated_ai_workflow","direct_provider_submission":False,
+         "reason":"Public website does not hold provider write credentials"},
        "connectors":[
          {"name":"Himalayas","mode":"public API","status":"public_search"},
          {"name":"Jobicy","mode":"public API and MCP","status":"public_search"},
@@ -93,6 +107,7 @@ def export(db_path, dest):
          {"name":"Apify","mode":"Store API","status":"product_discovery_only"},
        ],
        "capabilities":{"search":True,"sort":True,"copy_ai_draft_prompt":True,
+                       "ai_application_workflow_link":True,
                        "external_apply":"open_original_provider",
                        "cross_platform_messages":False,
                        "auto_hire":False,"paid_order":False}
