@@ -35,7 +35,8 @@ def test_fail_closed_if_registry_down():
 def test_no_invented_financial_outcomes_or_unsigned_contracts():
     row={"source":"jobicy","external_id":"001","title":"Python automation freelance contractor",
          "contract_type":"contractor","ai_relevance":80,"fit_score":90,
-         "url":"https://jobs.example.com/001","proposal_draft":"NOT SENT"}
+         "url":"https://jobs.example.com/001","proposal_draft":"NOT SENT",
+         "description":"Fixed-price deliverable: Python API integration script"}
     r=score_candidate(row)
     assert r["opportunity_type"] == "possible_paid_project_unverified"
     assert r["expected_net_profit"] is None
@@ -56,7 +57,7 @@ def test_queue_uses_existing_deduplicated_db(tmp_path):
     init_db(db)
     row=enrich_job(NormalizedJob(source="remotive", external_id="1",
           title="AI automation freelance contractor", contract_type="contractor",
-          url="https://example.org/gig",description="OpenAI API consulting project"))
+          url="https://example.org/gig",description="Fixed-price deliverable: Python API integration workflow"))
     with connect(db) as conn:
         upsert_job(conn,row)
         upsert_job(conn,row)
