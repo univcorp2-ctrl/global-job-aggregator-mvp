@@ -91,6 +91,105 @@ function renderStages(stages){
   set('progressPercent',pct+'%');set('progressCount',done+'/'+total+' 段階');
   byId('overallBar').style.width=pct+'%';
 }
+function renderApplicationHistory(items) {
+  const root=byId('applicationHistory');
+  if(!root)return;
+  root.replaceChildren();
+  const valid=array(items).slice(0,20);
+  if(!valid.length){
+    const empty=document.createElement('div');
+    empty.className='empty';empty.textContent='公式の提出済み履歴はまだありません';
+    root.appendChild(empty);return;
+  }
+  valid.forEach(item=>{
+    const row=document.createElement('div');
+    row.className='application-history-entry';
+    const left=document.createElement('div');
+    const info=document.createElement('div');
+    info.className='application-history-info';
+    const title=document.createElement('strong');
+    title.textContent=item.title||'案件名未取得';
+    const meta=document.createElement('small');
+    meta.textContent=(item.platform||'Upwork')+' ・ '+jst(item.submitted_at);
+    info.append(title,meta);
+    const right=document.createElement('div');
+    right.className='application-history-terms';
+    const status=document.createElement('span');
+    status.textContent=item.status==='Submitted'?'応募提出済み':'確認待ち';
+    const terms=document.createElement('small');
+    terms.textContent='
+  const g=goal||{};
+  const target=Number.isInteger(g.target)&&g.target>0?g.target:100;
+  const verified=Number.isInteger(g.verified_submitted)?g.verified_submitted:null;
+  set('applicationGoalCount',(verified===null?'未確認':num(verified))+' / '+num(target));
+  const bar=byId('applicationGoalBar');
+  if(bar)bar.style.width=(verified===null?0:Math.max(0,Math.min(100,100*verified/target)))+'%';
+  set('applicationQueue',num(g.candidate_queue));
+  set('applicationScreened',num(g.marketplace_rows_screened));
+  set('applicationCampaignAt',jst(g.campaign_checked_at,true));
+}
+function renderUpwork(u){
+  const recent = u && u.verification==='recent';
+  set('upworkVerified',u?.verified_at ? '公式最終確認 '+jst(u.verified_at) : '公式照合未完了');
+  set('upworkSubmitted',recent && Number.isInteger(u.submitted) ? num(u.submitted)+'件' : '再確認が必要');
+  let state='未確認';
+  if(recent && u.target==='not_submitted')state='未応募';
+  if(recent && u.target==='submitted')state='応募済み';
+  if(recent && u.target==='closed')state='募集終了';
+  set('upworkCandidateStatus',state);
+  set('upworkConnects',recent && Number.isInteger(u.target_connects_cost) && Number.isInteger(u.connects_balance)
+    ? num(u.target_connects_cost)+' / '+num(u.connects_balance)
+    : '再確認が必要');
+  set('upworkInFlight',recent && Number.isInteger(u.pending) && Number.isInteger(u.invitations)
+    ? num(u.pending)+'件 / '+num(u.invitations)+'件' : '再確認が必要');
+}
+function render(data){
+  if(!data || data.schema!==1 || !data.metrics)throw Error('Invalid public status schema');
+  const m=data.metrics,s=array(data.sources),stages=array(data.stages);
+  set('jobsFetched',num(m.jobs_fetched));
+  set('feedsCount',m.sources_ok+'/'+m.sources_total+' 媒体が正常');
+  set('candidates',num(m.candidates));
+  set('mcpFound',num(m.mcp_found));
+  set('mcpIndexed',num(m.mcp_indexed)+'件を候補台帳に収録');
+  set('apifyFound',num(m.apify_found));
+  set('lastRun',jst(data.last_run));
+  set('nextRun',jst(data.next_run_estimate)+'（目安）');
+  set('lastUpdated','公開データ更新 '+jst(data.published_at,true));
+  set('sourceSummary',m.sources_ok+' / '+m.sources_total+' 正常');
+  set('funnelCandidates',num(m.candidates));
+  set('applications',m.applications == null ? '未確認' : num(m.applications));
+  set('contracts',num(m.contracts));
+  set('outsourced',num(m.outsourced));
+  set('revenue','¥'+num(m.revenue_jpy_verified));
+  const healthy=data.health==='running',degraded=data.health==='degraded';
+  const pill=byId('livePill');
+  pill.className='pill'+(healthy?'':degraded?' pill-warning':' pill-muted');
+  pill.replaceChildren();
+  const dot=document.createElement('span');dot.className='pulse-dot';pill.appendChild(dot);
+  pill.appendChild(document.createTextNode(healthy?' 正常稼働':degraded?' 更新遅延':' 停止・未確認'));
+  set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
+  set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
+  byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
+  renderCampaign(data.application_goal);renderApplicationHistory(data.application_history);renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
+}
+async function refresh(){
+  try{
+    const response=await fetch('/status.json?cache='+Date.now(),{cache:'no-store'});
+    if(!response.ok)throw Error('public status fetch failed');
+    render(await response.json());
+  }catch(error){
+    set('runState','CHECK');set('runtimeHint','公開データが取得できません');
+    const pill=byId('livePill');pill.className='pill pill-muted';pill.textContent='確認できません';
+  }
+}
+refresh();
+window.setInterval(refresh,300000);
++num(item.bid_usd)+' / '+num(item.connects_spent)+' Connects';
+    right.append(status,terms);
+    row.append(info,right);
+    root.appendChild(row);
+  });
+}
 function renderCampaign(goal) {
   const g=goal||{};
   const target=Number.isInteger(g.target)&&g.target>0?g.target:100;
