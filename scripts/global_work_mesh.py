@@ -119,8 +119,14 @@ def export(db_path, dest):
         "notes":"Official account MCP only; personal proposals and Upwork job details excluded from the public catalog"},
        {"name":"Contra","status":"requires_confirmation","listing_count":None,
         "type":"Freelance projects","notes":"No verified public listing feed; OAuth and terms required"},
-       {"name":"Freelancer.com","status":"not_connected","listing_count":None,
-        "type":"Freelance projects","notes":"Provider write/marketplace permissions unverified"},
+       {"name":"Freelancer.com","status":"connected_private","listing_count":None,
+        "type":"Freelance projects","notes":"Official public GET candidates saved privately; verified bidding/write permissions unavailable"},
+       {"name":"Arbeitnow","status":"connected_private","listing_count":None,
+        "type":"Remote employment feed","notes":"Included in operations collector; redistribution not added to this public catalog"},
+       {"name":"Remotive","status":"connected_private","listing_count":None,
+        "type":"Remote employment feed","notes":"Included in operations collector; redistribution not added to this public catalog"},
+       {"name":"Remoshift","status":"connected_private","listing_count":None,
+        "type":"Remote employment feed","notes":"Included in operations collector; redistribution not added to this public catalog"},
     ]
     payload={
        "schema":1, "updated_at":datetime.now(timezone.utc).isoformat(),
