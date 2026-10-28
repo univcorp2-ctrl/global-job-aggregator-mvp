@@ -9,7 +9,7 @@
 <div class="page">
 <header class="header">
   <a href="/" class="brand"><span class="brand-mark">G<span>●</span></span><span>GLOBAL<span class="accent">WORK</span><small>MESH / AI WORK NETWORK</small></span></a>
-  <nav><a href="#opportunities">案件を探す</a><a href="#connectors">API・MCP</a><a href="https://revenue-agent-ops.pages.dev/" target="_blank" rel="noopener noreferrer">運用状況</a></nav>
+  <nav><a href="#opportunities">案件を探す</a><a href="#origins">媒体別</a><a href="#connectors">API・MCP</a><a href="https://revenue-agent-ops.pages.dev/" target="_blank" rel="noopener noreferrer">運用状況</a></nav>
   <span class="online"><i></i> API-connected</span>
 </header>
 <main>
@@ -25,9 +25,14 @@
 </section>
 <section class="metrics">
  <div><small>掲載中の公開求人</small><strong id="totalJobs">—</strong><span>許諾済みAPIから取得</span></div>
- <div><small>AI優先候補</small><strong id="aiJobs">—</strong><span>適性は未検証の推定</span></div>
+ <div><small>AI完結の仮候補</small><strong id="aiJobs">—</strong><span>確認済みの有償案件ではない</span></div>
  <div><small>掲載データ元</small><strong id="providerCount">2</strong><span>Himalayas + Jobicy</span></div>
- <div><small>データ更新</small><strong class="metric-small" id="refreshed">—</strong><span>PCでの定期収集</span></div>
+ <div><small>データ更新</small><strong class="metric-small" id="refreshed">—</strong><span>公開データ生成日時（JST）</span></div>
+</section>
+<section class="source-section" id="origins" aria-labelledby="sourceTitle">
+ <div class="section-heading"><div><div class="eyebrow">DATA PROVENANCE</div><h2 id="sourceTitle">どの媒体から何件取得しているか</h2><p>公開許可された求人と、認証が必要な業務委託プラットフォームを区別。未取得の媒体は件数を推測しません。</p></div></div>
+ <div id="sourceSummary" class="source-summary" aria-live="polite"></div>
+ <div class="source-note">Upworkの応募履歴・本人向け求人は公開ページに転載していません。右上「運用状況」および本人用の非公開管理シートで確認します。</div>
 </section>
 <section class="listing-section" id="opportunities">
  <div class="section-heading"><div><div class="eyebrow">EXPLORE OPPORTUNITIES</div><h2>案件を見つける</h2><p>応募は掲載元の公式ページへ移動。求人と受託案件は区別しています。</p></div><div class="result-number" id="resultCount">— 件</div></div>
@@ -36,10 +41,12 @@
    <select id="source" aria-label="掲載元を絞る"><option value="all">すべての掲載元</option><option value="Himalayas">Himalayas</option><option value="Jobicy">Jobicy</option></select>
    <select id="sort" aria-label="並べ替え"><option value="recent">新着順</option><option value="ai">AI優先度順</option><option value="title">タイトル順</option></select>
  </div>
+ <div class="view-actions"><button type="button" data-view="table" class="selected">一覧表示</button><button type="button" data-view="cards">カード表示</button><span>各行から元サイトへ移動できます</span></div>
  <div class="segmented" role="group" aria-label="案件カテゴリ"><button data-mode="all" class="selected">すべて</button><button data-mode="ai">AIで納品できそう</button><button data-mode="remote">リモート求人</button></div>
  <div class="notice"><span>ℹ</span><span>「AI応募を開始」は接続済みChatGPTで案件確認・応募準備を起動します。応募送信は、提供元の公式API/MCPで許可された場合に限ります。掲載元の確認・承認が必要な場合があります。ボタン操作だけで送信済みにはなりません。</span></div>
  <div class="apply-status" id="applyStatus" role="status" aria-live="polite"><span class="app-dot"></span><span>AI応募処理：候補を確認中</span></div>
- <div id="jobsList" class="jobs-list"><div class="empty">公開求人データを取得中…</div></div>
+ <div id="jobsTableWrap" class="jobs-table-wrap"><table class="jobs-table"><thead><tr><th>掲載元</th><th>募集職種 / 企業</th><th>地域</th><th>契約区分・報酬</th><th>掲載日</th><th>原文</th></tr></thead><tbody id="jobsTableBody"></tbody></table></div>
+ <div id="jobsList" class="jobs-list" hidden><div class="empty">公開求人データを取得中…</div></div>
  <button id="showMore" class="more" hidden>さらに表示</button>
 </section>
 <section id="connectors" class="connector-section">
