@@ -18,7 +18,8 @@
   <div class="eyebrow">GLOBAL OPPORTUNITIES <span>・</span> AI-FIRST</div>
   <h1>世界の仕事を、<br><em>ひとつの場所に。</em></h1>
   <p>世界の公開求人を、公式API・MCPで横断。AIが納品に使える可能性を優先表示し、応募先へ安全につなぎます。</p>
-  <div class="hero-actions"><a class="primary" href="#opportunities">案件を探す <span>↗</span></a><a class="secondary" href="#connectors">接続元を見る ↘</a></div>
+  <div class="hero-actions"><a class="primary" href="#opportunities">案件を探す <span>↗</span></a><button type="button" class="secondary ai-entry" id="autoApplyAll">AI候補の応募を一括開始 <span>✧</span></button></div>
+  <p class="ai-apply-disclaimer">AIが募集と応募条件を確認します。公式サービスで必要な最終承認は省略できません。</p>
  </div>
  <div class="visual" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="globe">✳</div><div class="floating floating-a">◉ <span>AI Research</span></div><div class="floating floating-b">◈ <span>Remote Work</span></div><div class="floating floating-c">◇ <span>Data & API</span></div></div>
 </section>
@@ -36,7 +37,8 @@
    <select id="sort" aria-label="並べ替え"><option value="recent">新着順</option><option value="ai">AI優先度順</option><option value="title">タイトル順</option></select>
  </div>
  <div class="segmented" role="group" aria-label="案件カテゴリ"><button data-mode="all" class="selected">すべて</button><button data-mode="ai">AIで納品できそう</button><button data-mode="remote">リモート求人</button></div>
- <div class="notice"><span>ℹ</span><span>AI適性は一次判定です。実際の募集・契約・本人確認・応募条件は必ず掲載元で確認してください。AIによる代理応募やメッセージ送信は現在未接続です。</span></div>
+ <div class="notice"><span>ℹ</span><span>「AI応募を開始」は接続済みChatGPTで案件確認・応募準備を起動します。応募送信は、提供元の公式API/MCPで許可された場合に限ります。掲載元の確認・承認が必要な場合があります。ボタン操作だけで送信済みにはなりません。</span></div>
+ <div class="apply-status" id="applyStatus" role="status" aria-live="polite"><span class="app-dot"></span><span>AI応募処理：候補を確認中</span></div>
  <div id="jobsList" class="jobs-list"><div class="empty">公開求人データを取得中…</div></div>
  <button id="showMore" class="more" hidden>さらに表示</button>
 </section>
