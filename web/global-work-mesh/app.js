@@ -67,7 +67,7 @@ function renderSourceSummary(payload){
    head.appendChild(el("strong","",c.name));
    const published=c.status==="published";
    head.appendChild(el("span",published?"source-live":"source-gated",
-      published?"公開掲載中":"公開カタログ未取得"));
+      published?"公開掲載中":c.status==="connected_private"?"非公開・別管理":"連携条件の確認中"));
    card.appendChild(head);
    if(published){
       card.appendChild(el("div","source-number",fmt(c.listing_count||0)+"件"));
@@ -81,7 +81,7 @@ function renderSourceSummary(payload){
       });
       card.appendChild(btn);
    }else{
-      card.appendChild(el("div","source-number muted","未連携"));
+      card.appendChild(el("div","source-number muted",c.status==="connected_private"?"非公開":"未取得"));
    }
    card.appendChild(el("p","",c.notes||"元サイトで詳細と利用条件を確認"));
    wrap.appendChild(card);
