@@ -784,8 +784,8 @@ class FreelancerPublicConnector(Connector):
                     url="https://www.freelancer.com/projects/" + seo,
                     compensation=pay, contract_type=pay_type + " freelance project",
                     remote="unknown", japan_ok="unknown",
-                    description=strip_html(item.get("description")
-                                           or item.get("preview_description"))[:5000],
+                    description=(strip_html(item.get("description")
+                                            or item.get("preview_description")) or "")[:5000],
                     published_at=posted,
                     raw={"project_status": "active", "bid_count": bid_count,
                          "budget_currency": currency, "budget_type": pay_type},
