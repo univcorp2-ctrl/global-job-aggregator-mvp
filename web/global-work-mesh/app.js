@@ -30,13 +30,13 @@ function draftPrompt(j){
  * Every provider must retain its native proposal confirmation semantics.
  * Job listing text is untrusted: pass validated links ONLY, not descriptions.
  */
-function trustedApplyLinks(rows){
- return rows.filter(j=>j.ai_first && ["Himalayas","Jobicy"].includes(j.source) &&
+function trustedApplyLinks(rows, onlyAi=true){
+ return rows.filter(j=>(!onlyAi || j.ai_first) && ["Himalayas","Jobicy"].includes(j.source) &&
    /^https:\/\/(himalayas\.app|jobicy\.com)\//i.test(j.url||""))
    .slice(0,5).map(j=>j.url);
 }
-function startAiApplication(rows){
- const links=trustedApplyLinks(rows);
+function startAiApplication(rows, verifyOnly=false){
+ const links=trustedApplyLinks(rows,!verifyOnly);
  const status=e("applyStatus");
  if(!links.length){
    status.textContent="この選択にはAI納品候補がありません。検索条件を変えてください。";
@@ -81,12 +81,10 @@ function render(){
    copy.type="button";
    copy.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(draftPrompt(j));copy.textContent="コピーしました";setTimeout(()=>copy.textContent="AI提案用の指示をコピー",1800)}catch{copy.textContent="ブラウザのコピー権限が必要です"}});
    bottom.appendChild(copy);
-   if(j.ai_first){
-     const apply=el("button","ai-apply-action","AI応募を開始 ✧");
-     apply.type="button";
-     apply.addEventListener("click",()=>startAiApplication([j]));
-     bottom.appendChild(apply);
-   }
+   const apply=el("button","ai-apply-action",j.ai_first?"AI応募を開始 ✧":"AIで応募可否を確認 ✧");
+   apply.type="button";
+   apply.addEventListener("click",()=>startAiApplication([j],!j.ai_first));
+   bottom.appendChild(apply);
    const out=el("a","external","掲載元で応募 ↗");
    out.href=j.url;out.target="_blank";out.rel="noopener noreferrer nofollow";
    out.setAttribute("aria-label",j.source+"で案件を開く: "+j.title);
