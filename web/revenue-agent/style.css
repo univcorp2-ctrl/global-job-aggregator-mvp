@@ -3,3 +3,13 @@
 @media(max-width:950px){.content-grid{grid-template-columns:1fr}.metric-grid{grid-template-columns:repeat(2,1fr)}.hero{grid-template-columns:1fr 225px}}
 @media(max-width:600px){.shell{padding:0 14px}.topbar{min-height:70px}.last-synced{display:none}.brand strong{font-size:11px}.brand small{font-size:8px}.hero{grid-template-columns:1fr;padding:28px 0;gap:20px}.hero p{font-size:11px}.hero-meta{font-size:10px;gap:10px}.runtime-block{padding:15px}.metric-grid{gap:9px}.metric{padding:15px;min-height:115px}.metric-label{font-size:10px}.metric-value{font-size:27px;margin:16px 0 4px}.metric-foot{font-size:9px}.panel{padding:18px 15px}.panel h2{font-size:15px}.source{grid-template-columns:89px 1fr 30px 38px;gap:7px}.source-name,.source-count{font-size:11px}.source-state{font-size:9px}#historyChart{height:165px}.footer-links{width:100%}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* Compact application evidence bar: mobile-first; no unverified success decoration. */
+.upwork-panel{margin-bottom:16px}
+.upwork-panel .panel-header{margin-bottom:16px}
+.upwork-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.upwork-detail{background:#1d2a3b;border:1px solid #344258;border-radius:10px;padding:13px;min-width:0}
+.upwork-detail span{display:block;color:var(--muted);font-size:10px;line-height:1.5}
+.upwork-detail strong{display:block;font-size:19px;margin-top:8px;overflow-wrap:anywhere}
+@media(max-width:950px){.upwork-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.upwork-grid{gap:8px}.upwork-detail{padding:11px}.upwork-detail strong{font-size:16px}}
