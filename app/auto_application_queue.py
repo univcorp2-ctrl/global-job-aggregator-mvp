@@ -87,6 +87,17 @@ def prepare(db_path, queue_path, limit=50):
             "SELECT source,title,url,description,contract_type,compensation,published_at "
             "FROM jobs ORDER BY COALESCE(published_at,fetched_at) DESC LIMIT 800"
         ).fetchall()
+        # Revoke previously misclassified employment leads, preserving audit history.
+        employment_sources=("himalayas","jobicy","arbeitnow","remotive","remoshift")
+        for old in q.execute(
+            "SELECT job_hash FROM application_intents WHERE source IN (?,?,?,?,?) "
+            "AND status IN ('qualification_pending','draft_ready')", employment_sources
+        ).fetchall():
+            q.execute("UPDATE application_intents SET status='rejected', "
+                      "last_evaluated_at=? WHERE job_hash=?", (_now(),old[0]))
+            q.execute("INSERT INTO application_events(job_hash,event_at,status,note) "
+                      "VALUES(?,?,?,?)",
+                      (old[0],_now(),"rejected","Public job feed is not a confirmed client gig"))
         n=0
         for raw in rows:
             row=dict(raw)
