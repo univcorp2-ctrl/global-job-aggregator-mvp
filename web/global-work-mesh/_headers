@@ -7,3 +7,11 @@
 
 /jobs.json
   Cache-Control: public, max-age=0, must-revalidate
+
+/app.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate
+
+/jobs.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: public, max-age=0, must-revalidate
