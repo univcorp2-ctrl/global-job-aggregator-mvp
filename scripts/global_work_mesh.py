@@ -10,13 +10,14 @@ import os
 import shutil
 import subprocess
 import sqlite3
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlsplit
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 from app.core import connect, init_db
 from app.revenue_policy import triage
-
-ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "web" / "global-work-mesh"
 FILES = ("index.html", "app.js", "style.css", "_headers")
 PROVIDERS = {"himalayas": ("Himalayas", "himalayas.app"),
