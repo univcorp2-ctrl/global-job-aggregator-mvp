@@ -45,8 +45,8 @@ def test_status_publish_drops_jobs_people_urls_and_auth(tmp_path):
                                                          encoding="utf-8")
     public = build_public_payload(tmp_path)
     encoded = json.dumps(public, ensure_ascii=False)
-    assert public["metrics"]["jobs_fetched"] == 50
-    assert public["metrics"]["sources_ok"] == 5
+    assert public["metrics"]["jobs_fetched"] == 60
+    assert public["metrics"]["sources_ok"] == 6
     assert public["metrics"]["candidates"] == 1
     assert public["metrics"]["mcp_found"] == 92
     assert public["metrics"]["mcp_indexed"] == 60
@@ -71,7 +71,7 @@ def test_failure_error_messages_get_discarded(tmp_path):
         json.dumps({"status": "success", "last_run": now}), encoding="utf-8"
     )
     public = build_public_payload(tmp_path)
-    assert public["metrics"]["sources_ok"] == 4
+    assert public["metrics"]["sources_ok"] == 5
     assert public["sources"][0]["error_type"] == "HTTPStatusError"
     assert "SECRET_TOKEN" not in json.dumps(public)
 
@@ -99,3 +99,49 @@ def test_export_contains_only_allowlisted_assets(tmp_path):
         "index.html", "app.js", "style.css", "_headers", "status.json"
     }
     assert "PRIVATE_CLIENT_NAME" not in (target / "status.json").read_text("utf-8")
+
+
+def test_upwork_official_snapshot_publishes_submission_state_but_not_secrets(tmp_path):
+    now = datetime.now(timezone.utc).isoformat()
+    (tmp_path / "latest.json").write_text(
+        json.dumps(fake_scan(run_at=now)), encoding="utf-8")
+    (tmp_path / "status.json").write_text(
+        json.dumps({"status":"success","last_run":now}), encoding="utf-8")
+    (tmp_path / "upwork-application-verification.json").write_text(
+        json.dumps({
+            "provider":"upwork_official_mcp", "verified_at":now,
+            "submitted":0, "pending":0, "invitations":0,
+            "connects_balance":12, "target_status":"not_submitted",
+            "target_connects_cost":10, "target_open":True,
+            "cover_letter":"PRIVATE_APPLICATION_LETTER",
+            "oauth_token":"SECRET_TOKEN",
+            "job_id":"2115263990921559749", "client_message":"PRIVATE_CLIENT"
+        }), encoding="utf-8")
+    pub=build_public_payload(tmp_path)
+    assert pub["upwork"]["verification"]=="recent"
+    assert pub["upwork"]["target"]=="not_submitted"
+    assert pub["upwork"]["target_connects_cost"]==10
+    assert pub["upwork"]["connects_balance"]==12
+    assert pub["metrics"]["applications"]==0
+    text=json.dumps(pub)
+    for marker in ["PRIVATE_APPLICATION_LETTER","SECRET_TOKEN","PRIVATE_CLIENT",
+                   "2115263990921559749","oauth_token","job_id"]:
+        assert marker not in text
+
+def test_upwork_snapshot_stale_cannot_claim_current_zero(tmp_path):
+    from datetime import timedelta
+    old=(datetime.now(timezone.utc)-timedelta(days=2)).isoformat()
+    (tmp_path/"upwork-application-verification.json").write_text(
+        json.dumps({"provider":"upwork_official_mcp","verified_at":old,
+                    "submitted":0,"pending":0,"invitations":0,
+                    "target_status":"not_submitted","connects_balance":12}),
+        encoding="utf-8")
+    result=build_public_payload(tmp_path)
+    assert result["upwork"]["verification"]=="stale"
+    assert result["metrics"]["applications"] is None
+    assert result["upwork"]["connects_balance"] is None
+
+def test_upwork_without_verification_uses_unknown_not_zero(tmp_path):
+    result=build_public_payload(tmp_path)
+    assert result["upwork"]["verification"]=="unverified"
+    assert result["metrics"]["applications"] is None
