@@ -1,6 +1,6 @@
 "use strict";
 const e=id=>document.getElementById(id);
-let data=[],mode="all",visible=12;
+let data=[],mode="all",visible=12,view="table";
 const fmt=n=>new Intl.NumberFormat("ja-JP").format(Number(n)||0);
 const formatDate=v=>{let d=new Date(v);return Number.isFinite(d.getTime())?new Intl.DateTimeFormat("ja-JP",{timeZone:"Asia/Tokyo",month:"short",day:"numeric"}).format(d):"時刻未確認"};
 function el(tag,className,text){let x=document.createElement(tag);if(className)x.className=className;if(text!==undefined)x.textContent=String(text);return x}
@@ -57,10 +57,64 @@ function startAiApplication(rows, verifyOnly=false){
  window.location.assign(target);
 }
 
+function renderSourceSummary(payload){
+ const wrap=e("sourceSummary");wrap.replaceChildren();
+ const src=Array.isArray(payload.source_coverage)?payload.source_coverage:
+  (payload.sources||[]).map(name=>({name,status:"published",listing_count:data.filter(j=>j.source===name).length}));
+ for(const c of src){
+   const card=el("article","source-card");
+   const head=el("div","source-head");
+   head.appendChild(el("strong","",c.name));
+   const published=c.status==="published";
+   head.appendChild(el("span",published?"source-live":"source-gated",
+      published?"公開掲載中":"公開カタログ未取得"));
+   card.appendChild(head);
+   if(published){
+      card.appendChild(el("div","source-number",fmt(c.listing_count||0)+"件"));
+      const btn=el("button","source-filter","この媒体の求人を見る");
+      btn.addEventListener("click",()=>{
+        e("source").value=c.name;
+        mode="all";
+        for(const b of document.querySelectorAll(".segmented button"))
+         b.classList.toggle("selected",b.dataset.mode==="all");
+        visible=data.length;render();e("opportunities").scrollIntoView({behavior:"smooth"});
+      });
+      card.appendChild(btn);
+   }else{
+      card.appendChild(el("div","source-number muted","未連携"));
+   }
+   card.appendChild(el("p","",c.notes||"元サイトで詳細と利用条件を確認"));
+   wrap.appendChild(card);
+ }
+}
 function render(){
- const items=filtered(),list=e("jobsList");
+ const items=filtered(),list=e("jobsList"),tbody=e("jobsTableBody"),table=e("jobsTableWrap");
+ list.hidden=view!=="cards";table.hidden=view!=="table";
+ tbody.replaceChildren();
  e("resultCount").textContent=fmt(items.length)+" 件";
  list.replaceChildren();
+ for(const j of items.slice(0,visible)){
+   const tr=el("tr");
+   tr.appendChild(el("td","",j.source));
+   const titleTd=el("td");
+   const titleLink=el("a","table-title",j.title);
+   titleLink.href=j.url;titleLink.target="_blank";titleLink.rel="noopener noreferrer nofollow";
+   titleTd.appendChild(titleLink);
+   titleTd.appendChild(el("small","",j.company||"企業名未表示"));
+   tr.appendChild(titleTd);
+   tr.appendChild(el("td","",j.location||"リモート等"));
+   const contractTd=el("td");
+   contractTd.appendChild(el("span","",j.contract_type||"雇用形態を元サイトで確認"));
+   if(j.compensation)contractTd.appendChild(el("small","",j.compensation));
+   tr.appendChild(contractTd);
+   tr.appendChild(el("td","",formatDate(j.published_at)));
+   const linkTd=el("td");
+   const link=el("a","external",j.source+"で開く");
+   link.href=j.url;link.target="_blank";link.rel="noopener noreferrer nofollow";
+   linkTd.appendChild(link);
+   tr.appendChild(linkTd);tbody.appendChild(tr);
+ }
+
  if(!items.length){list.appendChild(el("div","empty","条件に一致する公開求人がありません。検索条件を変更してください。"));e("showMore").hidden=true;return}
  for(const j of items.slice(0,visible)){
    const box=el("article","job");
@@ -113,7 +167,9 @@ for(const button of document.querySelectorAll(".segmented button")){
  button.addEventListener("click",()=>{mode=button.dataset.mode;visible=12;document.querySelectorAll(".segmented button").forEach(x=>x.classList.toggle("selected",x===button));render()});
 }
 e("autoApplyAll").addEventListener("click",()=>startAiApplication(filtered()));
-e("showMore").addEventListener("click",()=>{visible+=12;render()});
+e("showMore").textContent="全件表示";
+e("showMore").addEventListener("click",()=>{visible=data.length;render()});
+for(const b of document.querySelectorAll(".view-actions button"))b.addEventListener("click",()=>{view=b.dataset.view;document.querySelectorAll(".view-actions button").forEach(x=>x.classList.toggle("selected",x===b));render()});
 (async()=>{
  try{
   let r=await fetch("/jobs.json?bust="+Date.now(),{cache:"no-store"});
@@ -124,10 +180,11 @@ e("showMore").addEventListener("click",()=>{visible+=12;render()});
   e("totalJobs").textContent=fmt(data.length);
   e("aiJobs").textContent=fmt(data.filter(j=>j.ai_first).length);
   e("providerCount").textContent=fmt(json.sources.length);
-  const count=Number(json.auto_apply?.prequalified||0);
-  e("applyStatus").textContent="AI応募候補キュー: "+fmt(count)+"件 / 公式応募の送信確認: "+fmt(Number(json.auto_apply?.submitted||0))+"件。リンクを選ぶと公式応募ワークフローが開始します。";
+  const screening=Number(json.auto_apply?.screening_queue_unverified||0);
+  e("applyStatus").textContent="公開カタログ: "+fmt(data.length)+"件。うち本人が契約してAI納品できると確認済みの案件は0件です。未検証の審査キュー "+fmt(screening)+"件は応募可能な案件数ではありません。Upworkなど本人アカウントの公式応募履歴はこの公開ページに未同期です。";
   e("refreshed").textContent=formatDate(json.updated_at);
   renderConnections(json.connectors||[]);
+  renderSourceSummary(json);
   render();
  }catch(err){
   e("jobsList").replaceChildren(el("div","empty","データを取得できません。API公開状態を確認してください。"));
