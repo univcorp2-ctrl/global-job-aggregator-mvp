@@ -94,7 +94,11 @@ def export(db_path, dest):
         try:
             # SQLite opens read-only to avoid creating or changing private state during export.
             with sqlite3.connect(queue_db.as_uri()+"?mode=ro", uri=True) as q:
-                prequalified=q.execute("SELECT COUNT(*) FROM application_intents").fetchone()[0]
+                prequalified=q.execute(
+                    "SELECT COUNT(*) FROM application_intents WHERE status IN "
+                    "('qualification_pending','draft_ready',"
+                    "'provider_authorization_required','provider_confirmation_required')"
+                ).fetchone()[0]
                 submitted=q.execute("SELECT COUNT(*) FROM application_intents WHERE status='submitted'").fetchone()[0]
         except (sqlite3.Error, OSError):
             pass
