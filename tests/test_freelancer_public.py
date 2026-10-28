@@ -54,3 +54,16 @@ def test_freelancer_no_description_and_budget_and_default_wired():
     assert rows[0].description==""
     assert rows[0].compensation is None
     assert rows[0].contract_type=="hourly freelance project"
+
+
+def test_actual_bid_count_reduces_priority_but_not_below_zero():
+    from app.autonomous_agent import score_candidate
+    source={"source":"freelancer_public","title":"Python freelance automation",
+            "contract_type":"fixed freelance project",
+            "ai_relevance":90,"fit_score":80,"url":"https://www.freelancer.com/projects/example",
+            "raw":{"bid_count":0}}
+    quiet=score_candidate(source)
+    crowded=score_candidate({**source,"raw":{"bid_count":120}})
+    assert quiet["score"] > crowded["score"]
+    assert crowded["score"] >= 0
+    assert quiet["is_confirmed_contract"] is False
