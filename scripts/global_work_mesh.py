@@ -86,7 +86,8 @@ def export(db_path, dest):
             private_status=json.loads(status_path.read_text(encoding="utf8"))
         except (OSError,ValueError):
             private_status={}
-    # A successful queue preparation is NOT a provider-native submission.
+    # Queue entries are unverified screen leads, NOT qualified buyer service orders.
+    # Employment feeds can never be counted as freelance application opportunities.
     prequalified=max(0,min(100000,int(private_status.get("application_prequalified") or 0)))
     submitted=max(0,min(100000,int(private_status.get("real_application_count") or 0)))
     queue_db=Path(db_path).parent/"application-intents.db"
@@ -102,15 +103,40 @@ def export(db_path, dest):
                 submitted=q.execute("SELECT COUNT(*) FROM application_intents WHERE status='submitted'").fetchone()[0]
         except (sqlite3.Error, OSError):
             pass
+    # There is currently no verified buyer-issued service-order intake in this
+    # public publisher. Do not mislabel unverified queue rows as AI-ready jobs.
+    screening_queue=prequalified
+    prequalified=0
+    source_counts={name:sum(1 for j in jobs if j["source"]==name)
+                   for name in ("Himalayas","Jobicy")}
+    source_coverage=[
+       {"name":"Himalayas","status":"published","listing_count":source_counts["Himalayas"],
+        "type":"Public remote employment listings","notes":"Open original publisher; not automatically a subcontractable gig"},
+       {"name":"Jobicy","status":"published","listing_count":source_counts["Jobicy"],
+        "type":"Public remote employment listings","notes":"Open original publisher; not automatically a subcontractable gig"},
+       {"name":"Upwork","status":"connected_private","listing_count":None,
+        "type":"Freelance fixed-price / hourly marketplace",
+        "notes":"Official account MCP only; personal proposals and Upwork job details excluded from the public catalog"},
+       {"name":"Contra","status":"requires_confirmation","listing_count":None,
+        "type":"Freelance projects","notes":"No verified public listing feed; OAuth and terms required"},
+       {"name":"Freelancer.com","status":"not_connected","listing_count":None,
+        "type":"Freelance projects","notes":"Provider write/marketplace permissions unverified"},
+    ]
     payload={
        "schema":1, "updated_at":datetime.now(timezone.utc).isoformat(),
+       "source_counts":source_counts,
+       "source_coverage":source_coverage,
+       "employment_or_unverified_count":sum(j["kind"]=="employment_or_unverified" for j in jobs),
+       "verified_freelance_job_count":0,
        "listing_count":len(jobs),
        "sources":["Himalayas","Jobicy"],
        "rights":"Attribution-required, source-native apply links only; do not redistribute as API",
        "jobs":jobs,
-       "auto_apply":{"prequalified":prequalified,"submitted":submitted,
+       "auto_apply":{"prequalified":prequalified,"screening_queue_unverified":screening_queue,
+         "submitted":submitted,"submitted_scope":"local_automatic_queue_only",
+         "upwork_official_proposals_not_synced":True,
          "mode":"authenticated_ai_workflow","direct_provider_submission":False,
-         "reason":"Public website does not hold provider write credentials"},
+         "reason":"Public website lacks provider write credentials and cannot infer proposals from screening queue"},
        "connectors":[
          {"name":"Himalayas","mode":"public API","status":"public_search"},
          {"name":"Jobicy","mode":"public API and MCP","status":"public_search"},
