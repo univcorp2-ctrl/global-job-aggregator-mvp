@@ -94,7 +94,9 @@ def main():
                 "mcp_discovered": len(report["mcp_catalog"]["candidates"]),
                 "apify_discovered": len(report["apify_catalog"]["candidates"]),
                 "writes": 0,
-                "application_prequalified": sum(application_queue["status_counts"].values()),
+                "application_prequalified": sum(application_queue["status_counts"].get(k,0)
+                    for k in ("qualification_pending","draft_ready",
+                              "provider_authorization_required","provider_confirmation_required")),
                 "real_application_count": application_queue["external_submissions"]})
         except Exception as exc:
             # Do not dump remote API tokens/response bodies in errors.
