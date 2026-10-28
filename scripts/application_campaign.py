@@ -13,9 +13,11 @@ import os
 import re
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import quote
+import sys
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core import NormalizedJob, Settings, connect, init_db, upsert_job, strip_html
 from app.revenue_policy import triage
