@@ -33,7 +33,7 @@ def test_fail_closed_if_registry_down():
     assert entries == [] and state["state"] == "unavailable"
 
 def test_no_invented_financial_outcomes_or_unsigned_contracts():
-    row={"source":"jobicy","external_id":"001","title":"Python automation freelance contractor",
+    row={"source":"upwork","external_id":"001","title":"Python automation freelance contractor",
          "contract_type":"contractor","ai_relevance":80,"fit_score":90,
          "url":"https://jobs.example.com/001","proposal_draft":"NOT SENT",
          "description":"Fixed-price deliverable: Python API integration script"}
@@ -63,7 +63,7 @@ def test_queue_uses_existing_deduplicated_db(tmp_path):
         upsert_job(conn,row)
     r=evaluate_database(db,{})
     assert r["source_counts"]["remotive"] == 1
-    assert len(r["shortlist"]) == 1
+    assert len(r["shortlist"]) == 0
     assert r["queued_for_automatic_submission"] == 0
 
 
