@@ -12,7 +12,7 @@ from app.core import (
 
 def test_default_connectors_are_read_only_public_sources():
     names = [c.name for c in default_connectors()]
-    assert names == ["himalayas", "jobicy", "arbeitnow", "remotive", "remoshift"]
+    assert names == ["himalayas", "jobicy", "arbeitnow", "remotive", "remoshift", "freelancer_public"]
 
 
 def test_remotive_only_retains_attributed_original_links():
