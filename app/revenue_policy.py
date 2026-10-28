@@ -17,6 +17,15 @@ def triage(row: dict[str, Any]) -> dict[str, Any]:
     description = str(row.get("description") or "")[:3000]
     typ = str(row.get("contract_type") or "")
     text = " ".join((title, description, typ))
+    # Public employment feeds are NOT buyer-issued fixed-price service contracts.
+    # A digital deliverable mentioned in an employee job description does not qualify.
+    if str(row.get("source") or "").lower() in {
+        "himalayas", "jobicy", "arbeitnow", "remotive", "remoshift"
+    }:
+        return {"project_qualified": False, "delivery_mode": "employment_not_a_client_order",
+                "ai_only_candidate": False, "requires_human": False,
+                "reason": "employment_feed_not_marketplace_order",
+                "confirmed_ai_deliverable": False}
     has_delivery = bool(DELIVERABLE.search(text))
     employment = bool(EMPLOYMENT.search(text)) or bool(re.search(r"\b(manager|sales representative|full[- ]stack engineer|assistant|tutor)\b", title, re.I) and not has_delivery)
     requires_human = bool(MANUAL.search(text))
