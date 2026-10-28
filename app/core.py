@@ -705,6 +705,96 @@ class RemoshiftConnector(Connector):
 
 
 
+
+class FreelancerPublicConnector(Connector):
+    """Live customer projects via Freelancer.com's publicly reachable official 0.1 API.
+
+    GET-only and unauthenticated. This is not a client or worker login;
+    bids, messages, contracts, user profiles and payments are never accessed.
+    Results are filtered for relevant freelance project work; account eligibility,
+    client reliability and project terms must be verified on-platform separately.
+    """
+    name = "freelancer_public"
+    endpoint = "https://www.freelancer.com/api/projects/0.1/projects/active/"
+    queries = ("python automation", "Excel VBA", "Japanese translation")
+    # Only title/skill fields qualify a job; broad API query semantics add noise.
+    target = re.compile(
+        r"python|excel|spreadsheet|automation|api integrat|n8n|japanese|"
+        r"translation|data extract|pdf.*excel|google sheets|vba|workflow",
+        re.I,
+    )
+
+    async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
+        found: list[NormalizedJob] = []
+        seen: set[str] = set()
+        for keyword in self.queries:
+            payload = await request_json(
+                client, self.endpoint,
+                params={
+                    "query": keyword, "limit": min(max(settings.max_per_source, 1), 12),
+                    "full_description": "true",
+                },
+                headers=default_headers(settings),
+            )
+            if payload.get("status") not in (None, "success"):
+                raise ValueError("Freelancer public projects API reports non-success")
+            result = payload.get("result") or {}
+            projects = result.get("projects") if isinstance(result, dict) else []
+            for item in (projects or []):
+                if not isinstance(item, dict) or item.get("status") != "active":
+                    continue
+                ident = str(item.get("id") or "").strip()
+                title = str(item.get("title") or "").strip()
+                seo = str(item.get("seo_url") or "")
+                if not ident.isdigit() or not title or ident in seen:
+                    continue
+                tags = item.get("jobs") or []
+                labels = " ".join(
+                    str(tag.get("name") or tag.get("seo_url") or "")
+                    for tag in tags if isinstance(tag, dict)
+                )
+                if not self.target.search(title + " " + labels):
+                    continue
+                # Only an official relative project URL; never arbitrary host.
+                if not seo or seo.startswith("/") or ".." in seo or "://" in seo:
+                    continue
+                seen.add(ident)
+                currency_field = item.get("currency") or {}
+                currency = (currency_field.get("code") if isinstance(currency_field, dict)
+                            else str(currency_field)) or "USD"
+                budget = item.get("budget") or {}
+                bmin = budget.get("minimum") if isinstance(budget, dict) else None
+                bmax = budget.get("maximum") if isinstance(budget, dict) else None
+                def numeric(v):
+                    return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+                low, high = numeric(bmin), numeric(bmax)
+                pay_type = "hourly" if item.get("type") == "hourly" else "fixed"
+                pay = salary_range(low, high, currency)
+                if pay and pay_type == "hourly":
+                    pay += " /hr"
+                stamp = item.get("time_submitted") or item.get("submitdate")
+                try:
+                    posted = datetime.fromtimestamp(float(stamp), UTC).isoformat() if stamp else None
+                except (TypeError, ValueError, OverflowError, OSError):
+                    posted = None
+                bid_data = item.get("bid_stats") or {}
+                bid_count = bid_data.get("bid_count") if isinstance(bid_data, dict) else None
+                found.append(NormalizedJob(
+                    source=self.name, external_id=ident, title=title,
+                    url="https://www.freelancer.com/projects/" + seo,
+                    compensation=pay, contract_type=pay_type + " freelance project",
+                    remote="unknown", japan_ok="unknown",
+                    description=(strip_html(item.get("description")
+                                            or item.get("preview_description")) or "")[:5000],
+                    published_at=posted,
+                    raw={"project_status": "active", "bid_count": bid_count,
+                         "budget_currency": currency, "budget_type": pay_type},
+                ))
+                if len(found) >= settings.max_per_source:
+                    return found
+        return found
+
+
 def salary_range(minimum: Any, maximum: Any, currency: str = "USD", period: str | None = None) -> str | None:
     suffix = f" per {period}" if period else ""
     if minimum and maximum:
@@ -717,7 +807,7 @@ def salary_range(minimum: Any, maximum: Any, currency: str = "USD", period: str 
 
 
 def default_connectors() -> list[Connector]:
-    return [HimalayasConnector(), JobicyConnector(), ArbeitnowConnector(), RemotiveConnector(), RemoshiftConnector()]
+    return [HimalayasConnector(), JobicyConnector(), ArbeitnowConnector(), RemotiveConnector(), RemoshiftConnector(), FreelancerPublicConnector()]
 
 
 @dataclass

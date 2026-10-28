@@ -188,7 +188,11 @@ def score_candidate(row: dict[str, Any], feedback: dict[str, Any] | None = None
     has_url = bool(_safe_url(row.get("url")))
     base = (.48 * ai + .32 * fit + (10 if project else 0)
             + (5 if has_url else -15) - (40 if employment else 0))
-    score = round(max(0, min(100, base * _feedback_multiplier(row, feedback))), 1)
+    # Live Freelancer API exposes bid_count. First contract outreach prefers lower competition.
+    raw = row.get("raw") or {}
+    bids = raw.get("bid_count") if isinstance(raw, dict) else None
+    competition_penalty = min(25, bids / 4) if isinstance(bids, int) and not isinstance(bids, bool) and bids >= 0 else 0
+    score = round(max(0, min(100, base * _feedback_multiplier(row, feedback) - competition_penalty)), 1)
     gates = list(REQUIRES_REVIEW)
     if employment:
         label = "employment_not_subcontractable_without_new_contract"
