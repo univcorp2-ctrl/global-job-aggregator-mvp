@@ -91,6 +91,17 @@ function renderStages(stages){
   set('progressPercent',pct+'%');set('progressCount',done+'/'+total+' 段階');
   byId('overallBar').style.width=pct+'%';
 }
+function renderCampaign(goal) {
+  const g=goal||{};
+  const target=Number.isInteger(g.target)&&g.target>0?g.target:100;
+  const verified=Number.isInteger(g.verified_submitted)?g.verified_submitted:null;
+  set('applicationGoalCount',(verified===null?'未確認':num(verified))+' / '+num(target));
+  const bar=byId('applicationGoalBar');
+  if(bar)bar.style.width=(verified===null?0:Math.max(0,Math.min(100,100*verified/target)))+'%';
+  set('applicationQueue',num(g.candidate_queue));
+  set('applicationScreened',num(g.marketplace_rows_screened));
+  set('applicationCampaignAt',jst(g.campaign_checked_at,true));
+}
 function renderUpwork(u){
   const recent = u && u.verification==='recent';
   set('upworkVerified',u?.verified_at ? '公式最終確認 '+jst(u.verified_at) : '公式照合未完了');
@@ -133,7 +144,7 @@ function render(data){
   set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
   set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
   byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
-  renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
+  renderCampaign(data.application_goal);renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
 }
 async function refresh(){
   try{
