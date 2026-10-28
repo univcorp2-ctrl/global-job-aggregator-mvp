@@ -13,8 +13,8 @@ def test_ai_first_queue_is_persistent_and_deduplicated(tmp_path):
     init_db(db)
     with connect(db) as c:
         upsert_job(c,NormalizedJob(
-            source="himalayas",external_id="1",title="Python CSV automation",
-            url="https://himalayas.app/jobs/1",
+            source="upwork",external_id="1",title="Python CSV automation",
+            url="https://upwork.com/jobs/1",
             description="Fixed-price one-off CSV report and Python script deliverable",
             contract_type="contractor",company="A"
         ))
@@ -52,4 +52,6 @@ def test_reject_malicious_and_unqualified_jobs():
     assert _state_for({"source":"jobicy","url":"https://jobicy.com/1","title":"Full Time Manager",
          "description":"Annual salary job"}) is None
     assert _state_for({"source":"jobicy","url":"https://jobicy.com/1","title":"Python export",
+         "description":"One-off CSV report deliverable"}) is None
+    assert _state_for({"source":"upwork","url":"https://upwork.com/1","title":"Python export",
          "description":"One-off CSV report deliverable"})=="qualification_pending"
