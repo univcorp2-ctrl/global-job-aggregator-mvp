@@ -80,6 +80,48 @@ def _upwork_verification(root: Path) -> dict:
             "target_open": bool(raw.get("target_open")) if current else None}
 
 
+def _verified_submission_history(root: Path) -> list[dict]:
+    """Publish only a minimal display summary of official application receipts.
+
+    The private Drive file contains provider job/proposal IDs and URLs;
+    those identifiers, proposal letters, client information and attachments
+    are deliberately never copied to the public status. A draft is not evidence.
+    Verified receipts are durable even when the last Upwork readback is stale.
+    """
+    data = _load(root / "upwork-application-history.json")
+    if data.get("schema") != 1 or data.get("verification_source") != "Upwork official MCP":
+        return []
+    seen: set[str] = set()
+    out: list[dict] = []
+    for item in data.get("entries", [])[:100] if isinstance(data.get("entries"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        ident = item.get("proposal_id")
+        stamp = _safe_iso(item.get("submitted_at"))
+        title = item.get("job_title")
+        price = item.get("bid_amount")
+        spent = item.get("connects_spent")
+        if (item.get("platform") != "upwork"
+                or item.get("status") != "submitted"
+                or item.get("provider_status_label") != "Submitted"
+                or not isinstance(ident, str) or not re.fullmatch(r"\d{10,24}", ident)
+                or ident in seen or not stamp
+                or not isinstance(title, str) or not (1 <= len(title) <= 100)
+                or re.search(r"[<>{}\x00-\x1f]", title)
+                or not isinstance(price, (int, float)) or isinstance(price, bool)
+                or not (0 < price < 100000)
+                or not isinstance(spent, int) or isinstance(spent, bool)
+                or not (0 <= spent <= 500)):
+            continue
+        seen.add(ident)
+        out.append({
+            "platform": "Upwork", "title": title,
+            "submitted_at": stamp, "status": "Submitted",
+            "bid_usd": round(price, 2), "connects_spent": spent,
+        })
+    return sorted(out, key=lambda e: e["submitted_at"], reverse=True)
+
+
 def _sources(report: dict) -> list[dict]:
     by_name = {str(r.get("source")): r for r in report.get("collect", {}).get("results", [])
                if isinstance(r, dict)} if isinstance(report.get("collect"), dict) else {}
@@ -121,6 +163,11 @@ def build_public_payload(root: Path) -> dict:
     status = _load(root / "status.json")
     sources = _sources(report)
     upwork = _upwork_verification(root)
+    verified_history = _verified_submission_history(root)
+    # Evidence remains valid after last-session status or credits expire.
+    submitted_count = max(len(verified_history),
+                          upwork["submitted"] or 0
+                          if upwork["verification"] == "recent" else 0)
     campaign = _load(root / "application-campaign-status.json")
     queue_counts = campaign.get("queue_total_by_status") or {}
     if not isinstance(queue_counts, dict):
@@ -156,8 +203,7 @@ def build_public_payload(root: Path) -> dict:
          "read_only_success" and apify.get("status", {}).get("state") == "read_only_success",
          "detail": "自動発見のみ、権限の自動付与なし"},
         {"id": "apply", "name": "許諾済み案件への応募",
-         "done": upwork["verification"] == "recent" and
-                 bool(upwork["submitted"] and upwork["submitted"] > 0),
+         "done": submitted_count > 0,
          "detail": "公式MCPの提出済記録を反映（未確認時は未達扱い）"},
         {"id": "contract", "name": "受注・外注手配", "done": False,
          "detail": "正式契約・再委託同意が未達"},
@@ -175,12 +221,13 @@ def build_public_payload(root: Path) -> dict:
                     "mcp_found": _number(mcp.get("status", {}).get("count")),
                     "mcp_indexed": min(len(mcp.get("candidates", [])), 60),
                     "apify_found": _number(apify.get("status", {}).get("count")),
-                    "applications": upwork["submitted"], "contracts": 0, "outsourced": 0,
+                    "applications": submitted_count if verified_history or upwork["verification"] == "recent" else None, "contracts": 0, "outsourced": 0,
                     "revenue_jpy_verified": 0},
         "sources": sources, "upwork": upwork,
+        "application_history": verified_history,
         "application_goal": {
             "target": goal,
-            "verified_submitted": upwork["submitted"] if upwork["verification"] == "recent" else None,
+            "verified_submitted": submitted_count if verified_history or upwork["verification"] == "recent" else None,
             "candidate_queue": candidate_queue,
             "campaign_checked_at": campaign_at,
             "campaign_source": "Freelancer.com official public API" if campaign_at else "not_checked",
