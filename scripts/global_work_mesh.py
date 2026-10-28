@@ -89,6 +89,15 @@ def export(db_path, dest):
     # A successful queue preparation is NOT a provider-native submission.
     prequalified=max(0,min(100000,int(private_status.get("application_prequalified") or 0)))
     submitted=max(0,min(100000,int(private_status.get("real_application_count") or 0)))
+    queue_db=Path(db_path).parent/"application-intents.db"
+    if queue_db.is_file():
+        try:
+            # SQLite opens read-only to avoid creating or changing private state during export.
+            with sqlite3.connect(queue_db.as_uri()+"?mode=ro", uri=True) as q:
+                prequalified=q.execute("SELECT COUNT(*) FROM application_intents").fetchone()[0]
+                submitted=q.execute("SELECT COUNT(*) FROM application_intents WHERE status='submitted'").fetchone()[0]
+        except (sqlite3.Error, OSError):
+            pass
     payload={
        "schema":1, "updated_at":datetime.now(timezone.utc).isoformat(),
        "listing_count":len(jobs),
