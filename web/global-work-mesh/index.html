@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a1321">
+<meta name="description" content="世界の公開求人を横断検索し、AIで納品できる案件候補を見つける Global Work Mesh。">
+<title>Global Work Mesh — AI × Worldwide Work</title>
+<link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script>
+</head><body>
+<div class="page">
+<header class="header">
+  <a href="/" class="brand"><span class="brand-mark">G<span>●</span></span><span>GLOBAL<span class="accent">WORK</span><small>MESH / AI WORK NETWORK</small></span></a>
+  <nav><a href="#opportunities">案件を探す</a><a href="#connectors">API・MCP</a><a href="https://revenue-agent-ops.pages.dev/" target="_blank" rel="noopener noreferrer">運用状況</a></nav>
+  <span class="online"><i></i> API-connected</span>
+</header>
+<main>
+<section class="hero">
+ <div class="intro">
+  <div class="eyebrow">GLOBAL OPPORTUNITIES <span>・</span> AI-FIRST</div>
+  <h1>世界の仕事を、<br><em>ひとつの場所に。</em></h1>
+  <p>世界の公開求人を、公式API・MCPで横断。AIが納品に使える可能性を優先表示し、応募先へ安全につなぎます。</p>
+  <div class="hero-actions"><a class="primary" href="#opportunities">案件を探す <span>↗</span></a><a class="secondary" href="#connectors">接続元を見る ↘</a></div>
+ </div>
+ <div class="visual" aria-hidden="true"><div class="orbit orbit-one"></div><div class="orbit orbit-two"></div><div class="globe">✳</div><div class="floating floating-a">◉ <span>AI Research</span></div><div class="floating floating-b">◈ <span>Remote Work</span></div><div class="floating floating-c">◇ <span>Data & API</span></div></div>
+</section>
+<section class="metrics">
+ <div><small>掲載中の公開求人</small><strong id="totalJobs">—</strong><span>許諾済みAPIから取得</span></div>
+ <div><small>AI優先候補</small><strong id="aiJobs">—</strong><span>適性は未検証の推定</span></div>
+ <div><small>掲載データ元</small><strong id="providerCount">2</strong><span>Himalayas + Jobicy</span></div>
+ <div><small>データ更新</small><strong class="metric-small" id="refreshed">—</strong><span>PCでの定期収集</span></div>
+</section>
+<section class="listing-section" id="opportunities">
+ <div class="section-heading"><div><div class="eyebrow">EXPLORE OPPORTUNITIES</div><h2>案件を見つける</h2><p>応募は掲載元の公式ページへ移動。求人と受託案件は区別しています。</p></div><div class="result-number" id="resultCount">— 件</div></div>
+ <div class="toolbar">
+   <div class="search-input"><span>⌕</span><input id="search" placeholder="仕事内容・キーワード・企業名" aria-label="案件を検索"></div>
+   <select id="source" aria-label="掲載元を絞る"><option value="all">すべての掲載元</option><option value="Himalayas">Himalayas</option><option value="Jobicy">Jobicy</option></select>
+   <select id="sort" aria-label="並べ替え"><option value="recent">新着順</option><option value="ai">AI優先度順</option><option value="title">タイトル順</option></select>
+ </div>
+ <div class="segmented" role="group" aria-label="案件カテゴリ"><button data-mode="all" class="selected">すべて</button><button data-mode="ai">AIで納品できそう</button><button data-mode="remote">リモート求人</button></div>
+ <div class="notice"><span>ℹ</span><span>AI適性は一次判定です。実際の募集・契約・本人確認・応募条件は必ず掲載元で確認してください。AIによる代理応募やメッセージ送信は現在未接続です。</span></div>
+ <div id="jobsList" class="jobs-list"><div class="empty">公開求人データを取得中…</div></div>
+ <button id="showMore" class="more" hidden>さらに表示</button>
+</section>
+<section id="connectors" class="connector-section">
+ <div class="section-heading"><div><div class="eyebrow">OPEN CONNECTION LAYER</div><h2>API / MCP の接続状況</h2><p>表示できる機能と、承認・認証が必要な機能を明確に分離しています。</p></div></div>
+ <div id="connectorsList" class="connector-grid"></div>
+ <div class="policy"><strong>受注優先・AI完結優先の運用ポリシー</strong><p>案件発見 → AI納品適性判定 → 提案下書き → 掲載元での確認・受注 → AI納品。<b>受注が成立し、かつAIだけでは納品できない場合に限って</b>外注検討へ進みます。OAuth・支払い・契約・応募承認は、各提供元が要求する手続きに従います。</p></div>
+</section>
+</main>
+<footer><div>GLOBAL WORK MESH <span>© 2026</span></div><div><a href="https://revenue-agent-ops.pages.dev/">エージェント稼働状況</a><a href="https://github.com/univcorp2-ctrl/global-job-aggregator-mvp">開発リポジトリ</a></div><small>求人データは各掲載元の著作物です。元サイトで詳細をご確認ください。</small></footer>
+</div></body></html>
