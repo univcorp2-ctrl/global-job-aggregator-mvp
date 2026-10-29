@@ -92,20 +92,21 @@ function renderStages(stages){
   set('progressPercent',pct+'%');set('progressCount',done+'/'+total+' 段階');
   byId('overallBar').style.width=pct+'%';
 }
-function renderApplicationHistory(items) {
+function renderApplicationHistory(items){
   const root=byId('applicationHistory');
   if(!root)return;
   root.replaceChildren();
   const valid=array(items).slice(0,20);
   if(!valid.length){
-    const empty=document.createElement('div');
-    empty.className='empty';empty.textContent='公式の提出済み履歴はまだありません';
-    root.appendChild(empty);return;
+    const el=document.createElement('div');
+    el.className='empty';
+    el.textContent='確認済みの応募提出履歴はまだありません';
+    root.appendChild(el);
+    return;
   }
   valid.forEach(item=>{
     const row=document.createElement('div');
     row.className='application-history-entry';
-    const left=document.createElement('div');
     const info=document.createElement('div');
     info.className='application-history-info';
     const title=document.createElement('strong');
@@ -115,144 +116,88 @@ function renderApplicationHistory(items) {
     info.append(title,meta);
     const right=document.createElement('div');
     right.className='application-history-terms';
-    const status=document.createElement('span');
-    status.textContent=item.status==='Submitted'?'応募提出済み':'確認待ち';
+    const state=document.createElement('span');
+    state.textContent=item.status==='Submitted'?'応募提出済み':'確認待ち';
     const terms=document.createElement('small');
-    terms.textContent='
-  const g=goal||{};
-  const target=Number.isInteger(g.target)&&g.target>0?g.target:100;
-  const verified=Number.isInteger(g.verified_submitted)?g.verified_submitted:null;
-  set('applicationGoalCount',(verified===null?'未確認':num(verified))+' / '+num(target));
-  const bar=byId('applicationGoalBar');
-  if(bar)bar.style.width=(verified===null?0:Math.max(0,Math.min(100,100*verified/target)))+'%';
-  set('applicationQueue',num(g.candidate_queue));
-  set('applicationScreened',num(g.marketplace_rows_screened));
-  set('applicationCampaignAt',jst(g.campaign_checked_at,true));
-}
-function renderUpwork(u){
-  const recent = u && u.verification==='recent';
-  set('upworkVerified',u?.verified_at ? '公式最終確認 '+jst(u.verified_at) : '公式照合未完了');
-  set('upworkSubmitted',recent && Number.isInteger(u.submitted) ? num(u.submitted)+'件' : '再確認が必要');
-  let state='未確認';
-  if(recent && u.target==='not_submitted')state='未応募';
-  if(recent && u.target==='submitted')state='応募済み';
-  if(recent && u.target==='closed')state='募集終了';
-  set('upworkCandidateStatus',state);
-  set('upworkConnects',recent && Number.isInteger(u.target_connects_cost) && Number.isInteger(u.connects_balance)
-    ? num(u.target_connects_cost)+' / '+num(u.connects_balance)
-    : '再確認が必要');
-  set('upworkInFlight',recent && Number.isInteger(u.pending) && Number.isInteger(u.invitations)
-    ? num(u.pending)+'件 / '+num(u.invitations)+'件' : '再確認が必要');
-}
-function render(data){
-  if(!data || data.schema!==1 || !data.metrics)throw Error('Invalid public status schema');
-  const m=data.metrics,s=array(data.sources),stages=array(data.stages);
-  set('jobsFetched',num(m.jobs_fetched));
-  set('feedsCount',m.sources_ok+'/'+m.sources_total+' 媒体が正常');
-  set('candidates',num(m.candidates));
-  set('mcpFound',num(m.mcp_found));
-  set('mcpIndexed',num(m.mcp_indexed)+'件を候補台帳に収録');
-  set('apifyFound',num(m.apify_found));
-  set('lastRun',jst(data.last_run));
-  set('nextRun',jst(data.next_run_estimate)+'（目安）');
-  set('lastUpdated','公開データ更新 '+jst(data.published_at,true));
-  set('sourceSummary',m.sources_ok+' / '+m.sources_total+' 正常');
-  set('funnelCandidates',num(m.candidates));
-  set('applications',m.applications == null ? '未確認' : num(m.applications));
-  set('contracts',num(m.contracts));
-  set('outsourced',num(m.outsourced));
-  set('revenue','¥'+num(m.revenue_jpy_verified));
-  const healthy=data.health==='running',degraded=data.health==='degraded';
-  const pill=byId('livePill');
-  pill.className='pill'+(healthy?'':degraded?' pill-warning':' pill-muted');
-  pill.replaceChildren();
-  const dot=document.createElement('span');dot.className='pulse-dot';pill.appendChild(dot);
-  pill.appendChild(document.createTextNode(healthy?' 正常稼働':degraded?' 更新遅延':' 停止・未確認'));
-  set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
-  set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
-  byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
-  renderCampaign(data.application_goal);renderWorker(data.worker);renderApplicationHistory(data.application_history);renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
-}
-async function refresh(){
-  try{
-    const response=await fetch('/status.json?cache='+Date.now(),{cache:'no-store'});
-    if(!response.ok)throw Error('public status fetch failed');
-    render(await response.json());
-  }catch(error){
-    set('runState','CHECK');set('runtimeHint','公開データが取得できません');
-    const pill=byId('livePill');pill.className='pill pill-muted';pill.textContent='確認できません';
-  }
-}
-refresh();
-window.setInterval(refresh,300000);
-+num(item.bid_usd)+' / '+num(item.connects_spent)+' Connects';
-    right.append(status,terms);
+    if(item.platform==='Email応募'){
+      terms.textContent='応募メール送信済み・返信待ち';
+    }else{
+      terms.textContent='$'+num(item.bid_usd)+' / '+num(item.connects_spent)+' Connects';
+    }
+    right.append(state,terms);
     row.append(info,right);
     root.appendChild(row);
   });
 }
+
 function renderWorker(w){
-  const node=w||{};
-  const active=node.state==='running';
-  const state=active?'稼働中・応募権限を照合中':
-              node.state==='stale'?'更新遅延・前回実行あり':'未稼働・未確認';
+  const data=w||{};
+  const state=data.state==='running'?'監視処理稼働中':
+              data.state==='stale'?'更新遅延':'未稼働・未確認';
   set('workerState',state);
-  set('workerLastTick',jst(node.last_tick,true));
-  set('workerEligible',num(node.high_fit_eligible));
-  set('workerPrepared',num(node.drafts_created));
-  set('workerUnknown',num(node.unknown_outcome));
-  const parent=byId('workerPlatforms');
-  if(!parent)return;
-  parent.replaceChildren();
+  set('workerLastTick',jst(data.last_tick,true));
+  set('workerEligible',num(data.high_fit_eligible));
+  set('workerPrepared',num(data.drafts_created));
+  set('workerUnknown',num(data.unknown_outcome));
+  const list=byId('workerPlatforms');
+  if(!list)return;
+  list.replaceChildren();
   const labels={
-    'requires_individual_confirmation':'案件ごとに本人承認',
-    'authorized':'公式API入札可能',
-    'blocked_permission':'API認証・書面許可待ち',
-    'blocked_account':'ログイン・正規応募経路待ち',
-    'blocked_profile':'プロフィール/KYC未完',
-    'blocked_apply':'応募API未接続',
-    'unverified':'状態未確認'
+    requires_individual_confirmation:'案件ごとに本人承認',
+    authorized:'公式API応募可能',
+    blocked_permission:'API書面許可・OAuth待ち',
+    blocked_account:'公式応募アカウント未接続',
+    blocked_profile:'プロフィール/KYC未完',
+    blocked_apply:'応募API未接続',
+    unverified:'未確認'
   };
-  array(node.providers).forEach(p=>{
+  array(data.providers).forEach(p=>{
     const row=document.createElement('div');
     row.className='worker-platform';
     const name=document.createElement('strong');
     name.textContent=p.name||'不明な媒体';
-    const val=document.createElement('span');
-    val.textContent=labels[p.state]||'未確認';
-    if(p.state==='authorized')val.className='allowed';
-    row.append(name,val);parent.appendChild(row);
+    const value=document.createElement('span');
+    value.textContent=labels[p.state]||'未確認';
+    if(p.state==='authorized')value.className='allowed';
+    row.append(name,value);
+    list.appendChild(row);
   });
 }
-function renderCampaign(goal) {
+
+function renderCampaign(goal){
   const g=goal||{};
   const target=Number.isInteger(g.target)&&g.target>0?g.target:100;
-  const verified=Number.isInteger(g.verified_submitted)?g.verified_submitted:null;
-  set('applicationGoalCount',(verified===null?'未確認':num(verified))+' / '+num(target));
+  const submitted=Number.isInteger(g.verified_submitted)?g.verified_submitted:null;
+  set('applicationGoalCount',(submitted===null?'未確認':num(submitted))+' / '+num(target));
   const bar=byId('applicationGoalBar');
-  if(bar)bar.style.width=(verified===null?0:Math.max(0,Math.min(100,100*verified/target)))+'%';
+  if(bar)bar.style.width=(submitted===null?0:Math.max(0,Math.min(100,100*submitted/target)))+'%';
   set('applicationQueue',num(g.candidate_queue));
   set('applicationScreened',num(g.marketplace_rows_screened));
   set('applicationCampaignAt',jst(g.campaign_checked_at,true));
 }
+
 function renderUpwork(u){
-  const recent = u && u.verification==='recent';
-  set('upworkVerified',u?.verified_at ? '公式最終確認 '+jst(u.verified_at) : '公式照合未完了');
-  set('upworkSubmitted',recent && Number.isInteger(u.submitted) ? num(u.submitted)+'件' : '再確認が必要');
+  const recent=u&&u.verification==='recent';
+  set('upworkVerified',u?.verified_at?'公式最終確認 '+jst(u.verified_at):'公式照合未完了');
+  set('upworkSubmitted',recent&&Number.isInteger(u.submitted)?num(u.submitted)+'件':'再確認が必要');
   let state='未確認';
-  if(recent && u.target==='not_submitted')state='未応募';
-  if(recent && u.target==='submitted')state='応募済み';
-  if(recent && u.target==='closed')state='募集終了';
+  if(recent&&u.target==='not_submitted')state='未応募';
+  if(recent&&u.target==='submitted')state='応募済み';
+  if(recent&&u.target==='closed')state='募集終了';
   set('upworkCandidateStatus',state);
-  set('upworkConnects',recent && Number.isInteger(u.target_connects_cost) && Number.isInteger(u.connects_balance)
-    ? num(u.target_connects_cost)+' / '+num(u.connects_balance)
-    : '再確認が必要');
-  set('upworkInFlight',recent && Number.isInteger(u.pending) && Number.isInteger(u.invitations)
-    ? num(u.pending)+'件 / '+num(u.invitations)+'件' : '再確認が必要');
+  set('upworkConnects',recent&&Number.isInteger(u.target_connects_cost)&&Number.isInteger(u.connects_balance)
+    ?num(u.target_connects_cost)+' / '+num(u.connects_balance)
+    :'再確認が必要');
+  set('upworkInFlight',recent&&Number.isInteger(u.pending)&&Number.isInteger(u.invitations)
+    ?num(u.pending)+'件 / '+num(u.invitations)+'件'
+    :'再確認が必要');
 }
+
 function render(data){
-  if(!data || data.schema!==1 || !data.metrics)throw Error('Invalid public status schema');
-  const m=data.metrics,s=array(data.sources),stages=array(data.stages);
+  if(!data||data.schema!==1||!data.metrics)throw Error('Invalid public status schema');
+  const m=data.metrics;
+  const sources=array(data.sources);
+  const stages=array(data.stages);
   set('jobsFetched',num(m.jobs_fetched));
   set('feedsCount',m.sources_ok+'/'+m.sources_total+' 媒体が正常');
   set('candidates',num(m.candidates));
@@ -264,30 +209,44 @@ function render(data){
   set('lastUpdated','公開データ更新 '+jst(data.published_at,true));
   set('sourceSummary',m.sources_ok+' / '+m.sources_total+' 正常');
   set('funnelCandidates',num(m.candidates));
-  set('applications',m.applications == null ? '未確認' : num(m.applications));
+  set('applications',m.applications==null?'未確認':num(m.applications));
   set('contracts',num(m.contracts));
   set('outsourced',num(m.outsourced));
   set('revenue','¥'+num(m.revenue_jpy_verified));
-  const healthy=data.health==='running',degraded=data.health==='degraded';
+  const healthy=data.health==='running';
+  const degraded=data.health==='degraded';
   const pill=byId('livePill');
   pill.className='pill'+(healthy?'':degraded?' pill-warning':' pill-muted');
   pill.replaceChildren();
-  const dot=document.createElement('span');dot.className='pulse-dot';pill.appendChild(dot);
+  const dot=document.createElement('span');
+  dot.className='pulse-dot';
+  pill.appendChild(dot);
   pill.appendChild(document.createTextNode(healthy?' 正常稼働':degraded?' 更新遅延':' 停止・未確認'));
   set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
   set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
   byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
-  renderCampaign(data.application_goal);renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
+  renderCampaign(data.application_goal);
+  renderApplicationHistory(data.application_history);
+  renderWorker(data.worker);
+  renderUpwork(data.upwork);
+  renderSources(sources);
+  renderStages(stages);
+  renderChart(array(data.history));
 }
+
 async function refresh(){
   try{
     const response=await fetch('/status.json?cache='+Date.now(),{cache:'no-store'});
     if(!response.ok)throw Error('public status fetch failed');
     render(await response.json());
   }catch(error){
-    set('runState','CHECK');set('runtimeHint','公開データが取得できません');
-    const pill=byId('livePill');pill.className='pill pill-muted';pill.textContent='確認できません';
+    set('runState','CHECK');
+    set('runtimeHint','公開データが取得できません');
+    const pill=byId('livePill');
+    pill.className='pill pill-muted';
+    pill.textContent='確認できません';
   }
 }
+
 refresh();
 window.setInterval(refresh,300000);
