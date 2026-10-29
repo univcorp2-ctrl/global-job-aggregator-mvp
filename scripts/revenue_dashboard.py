@@ -165,10 +165,32 @@ def build_public_payload(root: Path) -> dict:
     upwork = _upwork_verification(root)
     verified_history = _verified_submission_history(root)
     # Evidence remains valid after last-session status or credits expire.
+    # The private dispatch DB count is an SDK receipt, not a local draft. When the
+    # supervisor is stale, this recorded receipt remains durable.
+    native_receipts = _number(_load(root / "application-supervisor-status.json").get("native_submitted_total"),10000)
     submitted_count = max(len(verified_history),
                           upwork["submitted"] or 0
-                          if upwork["verification"] == "recent" else 0)
+                          if upwork["verification"] == "recent" else 0) + native_receipts
     campaign = _load(root / "application-campaign-status.json")
+    worker = _load(root / "application-supervisor-status.json")
+    last_worker = _safe_iso(worker.get("last_tick"))
+    worker_age = (datetime.now(timezone.utc)-datetime.fromisoformat(last_worker)).total_seconds() if last_worker else float("inf")
+    worker_state = ("running" if 0 <= worker_age < 60 * 60 else
+                    "stale" if last_worker else "not_started")
+    providers = []
+    # Provider summaries deliberately omit private project data and any credentials.
+    for name in ("Upwork", "Freelancer.com", "CrowdWorks", "Lancers", "Contra", "LinkedIn"):
+        match = next((p for p in worker.get("providers", [])
+                      if isinstance(p, dict) and p.get("name") == name), {})
+        status_value = match.get("state")
+        valid_states = {"requires_individual_confirmation", "authorized",
+                        "blocked_permission", "blocked_account", "blocked_profile",
+                        "blocked_apply"}
+        providers.append({
+            "name": name,
+            "state": status_value if status_value in valid_states else "unverified",
+            "queued": _number(match.get("queued"), 10000) if name == "Freelancer.com" else None,
+        })
     queue_counts = campaign.get("queue_total_by_status") or {}
     if not isinstance(queue_counts, dict):
         queue_counts = {}
@@ -221,19 +243,28 @@ def build_public_payload(root: Path) -> dict:
                     "mcp_found": _number(mcp.get("status", {}).get("count")),
                     "mcp_indexed": min(len(mcp.get("candidates", [])), 60),
                     "apify_found": _number(apify.get("status", {}).get("count")),
-                    "applications": submitted_count if verified_history or upwork["verification"] == "recent" else None, "contracts": 0, "outsourced": 0,
+                    "applications": submitted_count if verified_history or upwork["verification"] == "recent" or native_receipts else None, "contracts": 0, "outsourced": 0,
                     "revenue_jpy_verified": 0},
         "sources": sources, "upwork": upwork,
+        "worker": {
+            "state": worker_state,
+            "last_tick": last_worker,
+            "high_fit_eligible": _number(worker.get("high_fit_eligible"),10000),
+            "drafts_created": _number(worker.get("drafts_created"),10000),
+            "unknown_outcome": _number(worker.get("unknown_outcome"),10000),
+            "native_submitted": _number(worker.get("native_submitted_total"),10000),
+            "providers": providers,
+        },
         "application_history": verified_history,
         "application_goal": {
             "target": goal,
-            "verified_submitted": submitted_count if verified_history or upwork["verification"] == "recent" else None,
+            "verified_submitted": submitted_count if verified_history or upwork["verification"] == "recent" or native_receipts else None,
             "candidate_queue": candidate_queue,
             "campaign_checked_at": campaign_at,
             "campaign_source": "Freelancer.com official public API" if campaign_at else "not_checked",
             "marketplace_rows_screened": _number(campaign.get("marketplace_leads_scanned")),
             "campaign_api_errors": _number(campaign.get("api_errors")),
-            "provider_bids_sent": 0,
+            "provider_bids_sent": native_receipts,
             "limits": "No native write-scope auth; account verification and per-proposal review required",
             "note": "Queue items and draft proposals are not submitted applications.",
         },
