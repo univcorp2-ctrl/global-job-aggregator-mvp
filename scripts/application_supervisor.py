@@ -226,28 +226,36 @@ def run(root: Path, *, env: dict[str,str]|None=None,
             (datetime.now(timezone.utc).date().isoformat(),)
         ).fetchone()[0]
         for item in eligible:
-            if inspected>=15:
-                break
-            inspected+=1
             pid=str(item["project_id"])
             prior=conn.execute(
                 "SELECT state FROM dispatch_attempts WHERE provider=? AND external_job_id=?",
                 ("freelancer",pid)
             ).fetchone()
             if prior:
-                # No duplicate send or automatic retry after unknown outcome.
-                continue
+                # Only a blocked, never-attempted row can advance when
+                # provider approval becomes valid. Unknown/submitted never retry.
+                if prior[0]!="blocked" or not flags["authorized"]:
+                    continue
+            else:
+                if inspected>=15:
+                    break
+                inspected+=1
             if flags["authorized"] and (sent_this_run>=1 or sent_today>=3):
                 continue
             state="ready" if flags["authorized"] else "blocked"
             reason="" if flags["authorized"] else "provider_oauth_or_written_permission_missing"
-            conn.execute(
-                "INSERT INTO dispatch_attempts "
-                "(provider,external_job_id,title,bid_amount,draft,state,reason,created_at,updated_at) "
-                "VALUES(?,?,?,?,?,?,?,?,?)",
-                ("freelancer",pid,item["title"],item["amount"],
-                 item["draft"],state,reason,now_str,now_str)
-            )
+            if prior:
+                conn.execute(
+                    "UPDATE dispatch_attempts SET state=?,reason=?,updated_at=? "
+                    "WHERE provider=? AND external_job_id=? AND state='blocked'",
+                    (state,reason,now_str,"freelancer",pid))
+            else:
+                conn.execute(
+                    "INSERT INTO dispatch_attempts "
+                    "(provider,external_job_id,title,bid_amount,draft,state,reason,created_at,updated_at) "
+                    "VALUES(?,?,?,?,?,?,?,?,?)",
+                    ("freelancer",pid,item["title"],item["amount"],
+                     item["draft"],state,reason,now_str,now_str))
             conn.commit()
             if state!="ready":
                 continue
