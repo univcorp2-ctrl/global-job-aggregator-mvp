@@ -98,3 +98,46 @@ def test_ambiguous_send_never_retries_automatically(tmp_path):
     assert first["unknown_outcome"]==1
     assert again["unknown_outcome"]==1
     assert again["native_submitted_total"]==0
+
+
+
+def test_blocked_rows_resume_once_when_provider_approved(tmp_path):
+    setup(tmp_path)
+    blocked=run(tmp_path,env={},send=lambda x:"9999")
+    assert blocked["native_submitted_total"]==0
+    approved={"FLN_OAUTH_TOKEN":"fixture", "FLN_API_WRITTEN_PERMISSION":"true",
+              "FLN_AUTOBID_ENABLED":"true", "FLN_PROFILE_VERIFIED":"true"}
+    calls=[]
+    a=run(tmp_path,env=approved,send=lambda job:calls.append(job) or "501234567")
+    b=run(tmp_path,env=approved,send=lambda job:calls.append(job) or "501234567")
+    assert a["native_submitted_total"]==1
+    assert b["native_submitted_total"]==1
+    assert len(calls)==1
+
+
+def test_deny_public_freelancer_api_without_permission():
+    from unittest.mock import AsyncMock, patch
+    import asyncio
+    import pytest
+    from app.core import FreelancerPublicConnector, Settings
+    async def execute():
+        with patch("app.core.request_json",new=AsyncMock()) as mocked:
+            with pytest.raises(PermissionError):
+                await FreelancerPublicConnector().collect(None,Settings(max_per_source=5))
+            mocked.assert_not_awaited()
+    with patch.dict("os.environ",{"FLN_API_WRITTEN_PERMISSION":""}):
+        asyncio.run(execute())
+
+
+def test_official_campaign_stops_network_without_permission(tmp_path):
+    import asyncio
+    from unittest.mock import patch
+    from scripts.application_campaign import run as run_campaign
+    (tmp_path/"application-campaign-status.json").write_text(
+        json.dumps({"marketplace_leads_scanned":557,"run_at":"2026-10-28T13:33:02Z"}),
+        encoding="utf-8")
+    with patch.dict("os.environ",{"FLN_API_WRITTEN_PERMISSION":""}):
+        out=asyncio.run(run_campaign(tmp_path))
+    assert out["collection_state"]=="paused_pending_provider_written_permission"
+    assert out["marketplace_leads_scanned"]==557
+    assert out["provider_bids_sent"]==0
