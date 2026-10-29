@@ -170,7 +170,7 @@ function render(data){
   set('runState',healthy?'ACTIVE':degraded?'DELAYED':'CHECK');
   set('runtimeHint',healthy?'PCの定期実行を確認':degraded?'前回の処理は成功、更新遅延あり':'最後の実行を確認してください');
   byId('runtimeBar').style.width=healthy?'100%':degraded?'58%':'12%';
-  renderCampaign(data.application_goal);renderApplicationHistory(data.application_history);renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
+  renderCampaign(data.application_goal);renderWorker(data.worker);renderApplicationHistory(data.application_history);renderUpwork(data.upwork);renderSources(s);renderStages(stages);renderChart(array(data.history));
 }
 async function refresh(){
   try{
@@ -188,6 +188,39 @@ window.setInterval(refresh,300000);
     right.append(status,terms);
     row.append(info,right);
     root.appendChild(row);
+  });
+}
+function renderWorker(w){
+  const node=w||{};
+  const active=node.state==='running';
+  const state=active?'稼働中・応募権限を照合中':
+              node.state==='stale'?'更新遅延・前回実行あり':'未稼働・未確認';
+  set('workerState',state);
+  set('workerLastTick',jst(node.last_tick,true));
+  set('workerEligible',num(node.high_fit_eligible));
+  set('workerPrepared',num(node.drafts_created));
+  set('workerUnknown',num(node.unknown_outcome));
+  const parent=byId('workerPlatforms');
+  if(!parent)return;
+  parent.replaceChildren();
+  const labels={
+    'requires_individual_confirmation':'案件ごとに本人承認',
+    'authorized':'公式API入札可能',
+    'blocked_permission':'API認証・書面許可待ち',
+    'blocked_account':'ログイン・正規応募経路待ち',
+    'blocked_profile':'プロフィール/KYC未完',
+    'blocked_apply':'応募API未接続',
+    'unverified':'状態未確認'
+  };
+  array(node.providers).forEach(p=>{
+    const row=document.createElement('div');
+    row.className='worker-platform';
+    const name=document.createElement('strong');
+    name.textContent=p.name||'不明な媒体';
+    const val=document.createElement('span');
+    val.textContent=labels[p.state]||'未確認';
+    if(p.state==='authorized')val.className='allowed';
+    row.append(name,val);parent.appendChild(row);
   });
 }
 function renderCampaign(goal) {
