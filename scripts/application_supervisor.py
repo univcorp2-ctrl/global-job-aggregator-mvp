@@ -38,7 +38,7 @@ LANGUAGE_EXCLUDE = re.compile(
     r"|university document translation|voice recording|native speaker "
     r"(?!japanese)|cold call|telemarketing|human only|no ai allowed"
     r"|captcha|review boost|fake review|essay writing|ghostwrit"
-    r"|adult|crypto trading|casino|unlimited free trial)", re.I
+    r"|adult|crypto trading|casino|unlimited free trial|appointment bot|bulk marketing|right hand|long-term)", re.I
 )
 DELIVERY_TITLES = re.compile(
     r"(excel|spreadsheet|google sheets|python|web scraper|data clean"
@@ -100,17 +100,20 @@ def qualify(row: dict) -> dict | None:
         or raw.get("project_status")!="active"):
         return None
     bid_count=raw.get("bid_count")
-    if isinstance(bid_count,int) and bid_count>40:
+    if isinstance(bid_count,int) and bid_count>95:
         return None
     currency=raw.get("budget_currency","USD")
-    if currency!="USD":
+    minimums={"USD":15, "EUR":15, "GBP":15, "AUD":20,
+              "INR":500, "JPY":3000}
+    if currency not in minimums:
         return None
     compensation=str(row.get("compensation") or "")
-    m=re.search(r"USD\s+(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)",compensation)
-    if not m:
+    matched=re.search(r"([A-Z]{3})\s+([\d,]+(?:\.\d+)?)\s*-\s*([\d,]+(?:\.\d+)?)",compensation)
+    if not matched or matched.group(1)!=currency:
         return None
-    low,high=map(float,m.groups())
-    if not 35<=low<=high<=10000:
+    low=float(matched.group(2).replace(",",""))
+    high=float(matched.group(3).replace(",",""))
+    if not minimums[currency] <= low <= high <= 2000000:
         return None
     posted=row.get("published_at")
     if posted:
@@ -132,12 +135,12 @@ def qualify(row: dict) -> dict | None:
            "For this job I would first confirm the input format and expected "
            "output, build a small working example, verify edge cases and "
            "provide setup instructions.\n\n"
-           f"My fixed-price proposal is USD {amount:g}, subject to confirming "
+           f"My fixed-price proposal is {currency} {amount:g}, subject to confirming "
            "the final scope and source-data permissions. "
            "Could you share a representative input and what you will check "
            "at acceptance? That will help me confirm the delivery date.\n\nThanks.")
     return {"project_id":int(row["external_id"]),"title":title_clean,
-            "amount":amount,"draft":draft,"bid_count":bid_count}
+            "amount":amount,"currency":currency,"draft":draft,"bid_count":bid_count}
 
 
 def load_candidates(root: Path) -> tuple[list[dict],int]:
