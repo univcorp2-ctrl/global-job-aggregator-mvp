@@ -69,6 +69,7 @@ function renderSources(sources){
     const state=document.createElement('div');state.className='source-state';
     if(item.state==='ok')state.textContent='正常';
     else if(item.state==='error'){state.classList.add('is-error');state.textContent='エラー';state.title=item.error_type||'';}
+    else if(item.state==='blocked_permission'){state.classList.add('is-off');state.textContent='API許可待ち';}
     else{state.classList.add('is-off');state.textContent='未接続';}
     row.append(name,progress,count,state);wrap.appendChild(row);
   });
