@@ -1,6 +1,11 @@
 """Freelancer.com official public projects API: stable read-only integration."""
 import asyncio
 import httpx
+import pytest
+
+@pytest.fixture(autouse=True)
+def approved_test_api_access(monkeypatch):
+    monkeypatch.setenv('FLN_API_WRITTEN_PERMISSION','true')
 from app.core import (FreelancerPublicConnector, Settings, connect,
                       default_connectors, enrich_job, init_db, upsert_job)
 

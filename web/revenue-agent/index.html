@@ -20,24 +20,8 @@
       <div class="top-actions"><span class="last-synced" id="lastUpdated">データを取得中</span><span id="livePill" class="pill pill-muted"><span class="pulse-dot"></span> 接続確認中</span></div>
     </header>
     <main>
-      <section class="hero">
-        <div>
-          <div class="eyebrow"><span class="line"></span> REVENUE ENGINE / STATUS</div>
-          <h1>収益エージェント <span class="hero-soft">稼働モニター</span></h1>
-          <p>公式API・MCPの探索から案件選別までを自律実行。応募・受注・入金は確認済みの実績のみ表示します。</p>
-          <div class="hero-meta"><span><span class="mini-icon">◷</span> 前回の実行 <strong id="lastRun">—</strong></span><span><span class="mini-icon">↻</span> 次回の目安 <strong id="nextRun">—</strong></span></div>
-        </div>
-        <div class="runtime-block"><div class="runtime-label">エージェント状態</div><div class="runtime-value" id="runState">CHECKING</div><div class="runtime-sub" id="runtimeHint">バックグラウンド状態を確認中</div><div class="runtime-track"><div id="runtimeBar"></div></div></div>
-      </section>
-
-      <section aria-label="主な実績" class="metric-grid">
-        <article class="metric"><div class="metric-label">取得した求人 <span class="metric-icon">▦</span></div><div class="metric-value" id="jobsFetched">—</div><div class="metric-foot" id="feedsCount">公式API / 媒体別取得</div></article>
-        <article class="metric"><div class="metric-label">選別した案件候補 <span class="metric-icon">◎</span></div><div class="metric-value" id="candidates">—</div><div class="metric-foot">応募前の精査候補・未受注</div></article>
-        <article class="metric"><div class="metric-label">発見したMCP <span class="metric-icon">⌘</span></div><div class="metric-value" id="mcpFound">—</div><div class="metric-foot" id="mcpIndexed">登録候補として検索</div></article>
-        <article class="metric"><div class="metric-label">Apify商品候補 <span class="metric-icon">▣</span></div><div class="metric-value" id="apifyFound">—</div><div class="metric-foot">売上実績とは別の探索件数</div></article>
-      </section>
-
-      <section class="panel goal-panel" aria-label="実応募100件の達成状況">
+      <nav class="quick-links" aria-label="応募進捗への移動"><a href="#applications">応募100件の進捗</a><a href="#worker-control">バックグラウンド運転</a><a href="https://app.notion.com/p/40610562e58b81a38d58f4a60c2b4948" target="_blank" rel="noopener noreferrer">Notion台帳</a></nav>
+      <section id="applications" class="panel goal-panel" aria-label="実応募100件の達成状況">
         <div class="panel-header"><div><div class="panel-eyebrow">APPLICATIONS / FIRST 100</div><h2>応募100件チャレンジ</h2></div><strong class="goal-big" id="applicationGoalCount">確認中</strong></div>
         <div class="overall-progress"><div id="applicationGoalBar"></div></div>
         <div class="goal-summary">
@@ -55,6 +39,34 @@
         <div id="applicationHistory" class="application-history-list" aria-live="polite"><div class="empty">応募証憑を読み込み中</div></div>
         <p class="panel-caption">応募成立と受注・売上は別です。表示は公開可能な案件名、応募日時、提示金額とConnects使用数のみ。正式な提案IDとURLは非公開監査台帳・Notionで管理します。</p>
       </section>
+      <section id="worker-control" class="panel worker-panel" aria-label="応募エージェントの実行状況">
+        <div class="panel-header"><div><div class="panel-eyebrow">AUTOMATION WORKER / LIVE STATUS</div><h2>応募エージェントのバックグラウンド運転</h2></div><span class="soft-pill" id="workerState">未確認</span></div>
+        <div class="worker-summary">
+          <div><small>最終実行</small><strong id="workerLastTick">—</strong></div>
+          <div><small>適合した案件</small><strong id="workerEligible">—</strong></div>
+          <div><small>提案準備・検討済</small><strong id="workerPrepared">—</strong></div>
+          <div><small>送信結果要照合</small><strong id="workerUnknown">—</strong></div>
+        </div>
+        <div id="workerPlatforms" class="worker-platforms" aria-label="媒体別のAPI応募状態"></div>
+        <p class="panel-caption">稼働中＝案件選別・提案準備・権限確認の処理が動作していること。API入札は媒体の正式許可・OAuth・本人確認が揃った場合のみ。応募件数は公式受付番号の確認後に更新します。</p>
+      </section>
+      <section class="hero">
+        <div>
+          <div class="eyebrow"><span class="line"></span> REVENUE ENGINE / STATUS</div>
+          <h1>収益エージェント <span class="hero-soft">稼働モニター</span></h1>
+          <p>公式API・MCPの探索から案件選別までを自律実行。応募・受注・入金は確認済みの実績のみ表示します。</p>
+          <div class="hero-meta"><span><span class="mini-icon">◷</span> 前回の実行 <strong id="lastRun">—</strong></span><span><span class="mini-icon">↻</span> 次回の目安 <strong id="nextRun">—</strong></span></div>
+        </div>
+        <div class="runtime-block"><div class="runtime-label">エージェント状態</div><div class="runtime-value" id="runState">CHECKING</div><div class="runtime-sub" id="runtimeHint">バックグラウンド状態を確認中</div><div class="runtime-track"><div id="runtimeBar"></div></div></div>
+      </section>
+
+      <section aria-label="主な実績" class="metric-grid">
+        <article class="metric"><div class="metric-label">取得した求人 <span class="metric-icon">▦</span></div><div class="metric-value" id="jobsFetched">—</div><div class="metric-foot" id="feedsCount">公式API / 媒体別取得</div></article>
+        <article class="metric"><div class="metric-label">選別した案件候補 <span class="metric-icon">◎</span></div><div class="metric-value" id="candidates">—</div><div class="metric-foot">応募前の精査候補・未受注</div></article>
+        <article class="metric"><div class="metric-label">発見したMCP <span class="metric-icon">⌘</span></div><div class="metric-value" id="mcpFound">—</div><div class="metric-foot" id="mcpIndexed">登録候補として検索</div></article>
+        <article class="metric"><div class="metric-label">Apify商品候補 <span class="metric-icon">▣</span></div><div class="metric-value" id="apifyFound">—</div><div class="metric-foot">売上実績とは別の探索件数</div></article>
+      </section>
+
       <section class="panel upwork-panel" aria-label="Upwork応募の公式確認結果">
         <div class="panel-header">
           <div><div class="panel-eyebrow">APPLICATION AUDIT / UPWORK</div><h2>Upwork 応募・提出の確認</h2></div>

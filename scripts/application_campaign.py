@@ -158,6 +158,25 @@ def safe_write(path: Path, payload: dict):
 
 async def run(root: Path, *, goal: int = GOAL, pages: int = 3) -> dict:
     root.mkdir(parents=True, exist_ok=True)
+    if os.environ.get("FLN_API_WRITTEN_PERMISSION","").lower() not in ("1","yes","true"):
+        # Preserve previous historical scan metrics; do not pretend a new scan
+        # occurred when the provider forbids automated access.
+        p=root/"application-campaign-status.json"
+        try:
+            previous=json.loads(p.read_text(encoding="utf-8"))
+        except (OSError,ValueError):
+            previous={}
+        previous.update({
+            "collection_state":"paused_pending_provider_written_permission",
+            "permission_checked_at":datetime.now(timezone.utc).isoformat(),
+            "provider_bids_sent":0,"provider_write_enabled":False,
+            "blocking_reasons":[
+                "Freelancer.com written automation permission not supplied",
+                "Official OAuth and account/profile verification required"
+            ]
+        })
+        safe_write(p,previous)
+        return previous
     async with httpx.AsyncClient(
         timeout=httpx.Timeout(14.0),
         follow_redirects=False,
