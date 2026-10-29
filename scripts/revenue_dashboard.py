@@ -122,6 +122,48 @@ def _verified_submission_history(root: Path) -> list[dict]:
     return sorted(out, key=lambda e: e["submitted_at"], reverse=True)
 
 
+def _verified_email_application_history(root: Path) -> list[dict]:
+    """Public-safe, deduplicated record of replies to explicit advertised jobs.
+
+    Only a Gmail SENT receipt for a role that publicly solicits applications
+    counts; no speculative emails, drafts, recipients, message IDs or bodies
+    are copied to the public JSON.
+    """
+    source=_load(root/"email-application-history.json")
+    if source.get("schema")!=1 or source.get("verification_source")!="Gmail SENT":
+        return []
+    seen=set()
+    out=[]
+    entries=source.get("entries") or []
+    for entry in entries[:100] if isinstance(entries,list) else []:
+        if not isinstance(entry,dict) or entry.get("status")!="sent_verified":
+            continue
+        ident=entry.get("gmail_message_id")
+        at=_safe_iso(entry.get("submitted_at"))
+        company=entry.get("organization")
+        title=entry.get("job_title")
+        url=entry.get("job_url")
+        recipient=entry.get("recipient")
+        if (entry.get("platform")!="application_email"
+            or entry.get("source")!="Gmail SENT verified"
+            or not isinstance(ident,str)
+            or not re.fullmatch(r"[a-f0-9]{12,24}",ident)
+            or ident in seen or not at
+            or not isinstance(company,str) or len(company)>70
+            or not isinstance(title,str) or len(title)>100
+            or not isinstance(url,str) or not url.startswith("https://")
+            or not isinstance(recipient,str) or "@" not in recipient
+            or any(re.search(r"[<>{}\x00-\x1f]",x) for x in (company,title))):
+            continue
+        seen.add(ident)
+        out.append({
+            "platform":"Email応募", "title":f"{company} / {title}",
+            "submitted_at":at,"status":"Submitted",
+            "delivery":"Gmail SENT verified",
+        })
+    return sorted(out,key=lambda v:v["submitted_at"],reverse=True)
+
+
 def _sources(report: dict) -> list[dict]:
     by_name = {str(r.get("source")): r for r in report.get("collect", {}).get("results", [])
                if isinstance(r, dict)} if isinstance(report.get("collect"), dict) else {}
@@ -166,13 +208,15 @@ def build_public_payload(root: Path) -> dict:
     sources = _sources(report)
     upwork = _upwork_verification(root)
     verified_history = _verified_submission_history(root)
+    verified_email_history = _verified_email_application_history(root)
     # Evidence remains valid after last-session status or credits expire.
     # The private dispatch DB count is an SDK receipt, not a local draft. When the
     # supervisor is stale, this recorded receipt remains durable.
     native_receipts = _number(_load(root / "application-supervisor-status.json").get("native_submitted_total"),10000)
-    submitted_count = max(len(verified_history),
-                          upwork["submitted"] or 0
-                          if upwork["verification"] == "recent" else 0) + native_receipts
+    submitted_count = (max(len(verified_history),
+                           upwork["submitted"] or 0
+                           if upwork["verification"] == "recent" else 0)
+                       + len(verified_email_history) + native_receipts)
     campaign = _load(root / "application-campaign-status.json")
     worker = _load(root / "application-supervisor-status.json")
     last_worker = _safe_iso(worker.get("last_tick"))
@@ -245,7 +289,7 @@ def build_public_payload(root: Path) -> dict:
                     "mcp_found": _number(mcp.get("status", {}).get("count")),
                     "mcp_indexed": min(len(mcp.get("candidates", [])), 60),
                     "apify_found": _number(apify.get("status", {}).get("count")),
-                    "applications": submitted_count if verified_history or upwork["verification"] == "recent" or native_receipts else None, "contracts": 0, "outsourced": 0,
+                    "applications": submitted_count if verified_history or verified_email_history or upwork["verification"] == "recent" or native_receipts else None, "contracts": 0, "outsourced": 0,
                     "revenue_jpy_verified": 0},
         "sources": sources, "upwork": upwork,
         "worker": {
@@ -257,10 +301,10 @@ def build_public_payload(root: Path) -> dict:
             "native_submitted": _number(worker.get("native_submitted_total"),10000),
             "providers": providers,
         },
-        "application_history": verified_history,
+        "application_history": sorted(verified_history + verified_email_history, key=lambda i:i["submitted_at"], reverse=True),
         "application_goal": {
             "target": goal,
-            "verified_submitted": submitted_count if verified_history or upwork["verification"] == "recent" or native_receipts else None,
+            "verified_submitted": submitted_count if verified_history or verified_email_history or upwork["verification"] == "recent" or native_receipts else None,
             "candidate_queue": candidate_queue,
             "campaign_checked_at": campaign_at,
             "campaign_source": "Freelancer.com official public API" if campaign_at else "not_checked",
