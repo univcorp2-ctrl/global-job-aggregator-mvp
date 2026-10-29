@@ -136,6 +136,8 @@ def _sources(report: dict) -> list[dict]:
             "ConnectTimeout", "TimeoutException", "ValueError", "JSONDecodeError",
         ) else ("Error" if error else None)
         state = "unavailable" if not item else ("error" if error else "ok")
+        if code == "freelancer_public" and isinstance(error,str) and "PermissionError" in error:
+            state = "blocked_permission"
         out.append({"id": code, "name": SOURCE_NAMES[code],
                     "state": state, "fetched": _number(item.get("fetched")),
                     "saved": _number(item.get("saved")), "error_type": error_type})
