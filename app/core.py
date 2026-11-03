@@ -725,6 +725,8 @@ class FreelancerPublicConnector(Connector):
     )
 
     async def collect(self, client: httpx.AsyncClient, settings: Settings) -> list[NormalizedJob]:
+        if os.environ.get("FLN_API_WRITTEN_PERMISSION","").lower() not in ("1","yes","true"):
+            raise PermissionError("Freelancer API automation requires provider's express written permission")
         found: list[NormalizedJob] = []
         seen: set[str] = set()
         for keyword in self.queries:
